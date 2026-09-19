@@ -54,24 +54,65 @@ data class Organization(
 // ─── Projects ───
 
 @Serializable
+data class BaselineBudget(
+    val subtotal: Double? = null,
+    val labor_cost: Double? = null,
+    val labor_rate: Double? = null,
+    val est_tonnage: Double? = null,
+    val coating_cost: Double? = null,
+    val freight_cost: Double? = null,
+    val hardware_cost: Double? = null,
+    val material_cost: Double? = null,
+    val scope_of_work: String? = null,
+    val contract_value: Double? = null,
+    val equipment_cost: Double? = null,
+    val erection_hours: Double? = null,
+    val contingency_pct: Double? = null,
+    val detailing_hours: Double? = null,
+    val subcontract_cost: Double? = null,
+    val fabrication_hours: Double? = null,
+    val profit_margin_pct: Double? = null,
+    val schedule_deadline: String? = null,
+    val contingency_amount: Double? = null,
+    val unique_piece_marks: Int? = null,
+    val profit_margin_amount: Double? = null
+)
+
+@Serializable
 data class Project(
     val id: String,
+    val company_id: String? = null,
     val name: String,
-    val number: String,
+    val number: String? = null,
     val gc_name: String? = null,
+    val gc_contact: String? = null,
+    val gc_phone: String? = null,
     val contract_value: Double? = null,
-    val deadline: String? = null,
+    val contract_type: String? = null,
+    val est_tonnage: Double? = null,
     val status: String = "planning",
-    val color: String? = null,
     val pm_id: String? = null,
+    val start_date: String? = null,
+    val deadline: String? = null,
+    val description: String? = null,
+    val color: String? = null,
+    val is_archived: Boolean = false,
+    val created_by: String? = null,
+    val created_at: String? = null,
+    val updated_at: String? = null,
+    val architect_eor: String? = null,
+    val project_location: String? = null,
+    val unique_piece_marks: Int? = null,
+    val baseline_budget: BaselineBudget? = null,
+    val drawing_set_ref: String? = null,
+    val exclusions_qualifications: String? = null,
+    val estimate_id: String? = null,
     val address: String? = null,
     val scope: String? = null,
     val total_parts: Int = 0,
     val completed: Int = 0,
     val progress: Double = 0.0,
-    val total_weight: Double = 0.0,
-    val created_at: String? = null,
-    val updated_at: String? = null
+    val total_weight: Double = 0.0
 )
 
 @Serializable
@@ -92,23 +133,30 @@ data class Estimate(
 @Serializable
 data class Part(
     val id: String,
-    val part_mark: String,
-    val profile: String,
-    val status: String = "not_started",
-    val grade: String? = null,
-    val length: Double? = null,
-    val quantity: Int = 1,
-    val assembly_mark: String? = null,
-    val heat_number: String? = null,
-    val finish: String? = null,
-    val weight: Double? = null,
+    val company_id: String? = null,
     val project_id: String? = null,
+    val part_mark: String,
+    val assembly_mark: String? = null,
+    val profile: String,
+    val grade: String? = null,
+    val length: String? = null,
+    val weight: Double? = null,
+    val quantity: Int = 1,
+    val status: String = "not_started",
+    val phase: String? = null,
+    val heat_number: String? = null,
+    val drawing_id: String? = null,
+    val assigned_user_id: String? = null,
+    val notes: String? = null,
+    val created_by: String? = null,
+    val created_at: String? = null,
+    val updated_at: String? = null,
+    val name: String? = null,
+    val finish: String? = null,
     val project_name: String? = null,
     val project_number: String? = null,
-    val assigned_user_id: String? = null,
     val sequence: Int? = null,
-    val notes: String? = null,
-    // Production timestamps
+    // Production timestamps & flags
     val cut_completed_by: String? = null,
     val cut_completed_at: String? = null,
     val cut_hours: Double? = null,
@@ -128,8 +176,14 @@ data class Part(
     val finish_hours: Double? = null,
     val insp_completed_by: String? = null,
     val insp_completed_at: String? = null,
-    val created_at: String? = null,
-    val updated_at: String? = null
+    val material_lot_id: String? = null,
+    val stage_label: String? = null,
+    val cut_qty: Int = 0,
+    val fit_qty: Int = 0,
+    val weld_qty: Int = 0,
+    val weld_qc_qty: Int = 0,
+    val finish_qty: Int = 0,
+    val insp_qty: Int = 0
 )
 
 @Serializable

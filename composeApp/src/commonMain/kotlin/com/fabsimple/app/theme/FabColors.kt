@@ -16,6 +16,7 @@ object FabColors {
     // ─── Surfaces ───
     val Background = Color(0xFFF0F4F8)       // --bg (Fog Blue)
     val CardBackground = Color(0xFFFFFFFF)   // --bg-card
+    val Surface = Color(0xFFFFFFFF)          // --surface
     val MutedBackground = Color(0xFFE2E8F0)  // --bg-muted
 
     // ─── Text ───

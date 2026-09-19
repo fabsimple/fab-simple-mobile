@@ -56,7 +56,6 @@ fun ProjectPicker(
     }
 
     val filtered = projectsList
-        .filter { p -> p.status != "awarded_setup" }
         .filter { p ->
             search.isEmpty() ||
             p.name.contains(search, ignoreCase = true) ||

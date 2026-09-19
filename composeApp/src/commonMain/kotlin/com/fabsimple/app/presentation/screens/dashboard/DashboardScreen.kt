@@ -86,7 +86,9 @@ class DashboardScreen : Screen {
             title = "Dashboard",
             currentRoute = "dashboard",
             onNavigate = { route ->
-                if (route == "cut-list") {
+                if (route == "parts") {
+                    navigator.replaceAll(com.fabsimple.app.presentation.screens.dashboard.PartsListScreen())
+                } else if (route == "cut-list") {
                     navigator.replaceAll(com.fabsimple.app.presentation.screens.utilities.CutOptimizerScreen())
                 } else if (route == "copilot") {
                     navigator.replaceAll(com.fabsimple.app.presentation.screens.utilities.CopilotScreen())

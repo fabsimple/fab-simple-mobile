@@ -16,7 +16,8 @@ class ProjectRepositoryImpl(
             val list: List<Project> = apiClient.get("/projects")
             localDatabase.cacheProjects(list)
             list
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            e.printStackTrace()
             localDatabase.getCachedProjects()
         }
     }

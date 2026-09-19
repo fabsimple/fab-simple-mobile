@@ -36,6 +36,8 @@ class PlaceholderScreen(private val routeKey: String) : Screen {
             onNavigate = { route ->
                 if (route == "dashboard") {
                     navigator.replaceAll(DashboardScreen())
+                } else if (route == "parts") {
+                    navigator.replaceAll(PartsListScreen())
                 } else if (route == "cut-list") {
                     navigator.replaceAll(CutOptimizerScreen())
                 } else if (route == "copilot") {

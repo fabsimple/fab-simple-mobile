@@ -7,7 +7,7 @@ import com.fabsimple.shared.domain.model.ChatMessage
 
 @Serializable
 data class ApiEnvelope<T>(
-    val ok: Boolean,
+    val ok: Boolean = true,
     val data: T? = null,
     val error: ApiErrorDetail? = null
 )
@@ -138,14 +138,32 @@ data class SearchResponse(
 @Serializable
 data class DashboardProject(
     val id: String,
+    val company_id: String? = null,
     val name: String,
-    val number: String,
+    val number: String? = null,
     val gc_name: String? = null,
+    val gc_contact: String? = null,
+    val gc_phone: String? = null,
     val contract_value: Double? = null,
+    val contract_type: String? = null,
+    val est_tonnage: Double? = null,
     val deadline: String? = null,
-    val status: String,
+    val status: String = "planning",
     val color: String? = null,
     val pm_id: String? = null,
+    val start_date: String? = null,
+    val description: String? = null,
+    val is_archived: Boolean = false,
+    val created_by: String? = null,
+    val created_at: String? = null,
+    val updated_at: String? = null,
+    val architect_eor: String? = null,
+    val project_location: String? = null,
+    val unique_piece_marks: Int? = null,
+    val baseline_budget: com.fabsimple.shared.domain.model.BaselineBudget? = null,
+    val drawing_set_ref: String? = null,
+    val exclusions_qualifications: String? = null,
+    val estimate_id: String? = null,
     val total_parts: Int = 0,
     val completed: Int = 0,
     val progress: Double = 0.0
@@ -192,25 +210,25 @@ data class DashboardActivity(
 @Serializable
 data class DashboardNcr(
     val id: String,
-    val ncr_number: String,
-    val description: String,
-    val status: String
+    val ncr_number: String? = null,
+    val description: String? = null,
+    val status: String = "open"
 )
 
 @Serializable
 data class DashboardCo(
     val id: String,
-    val co_number: String,
+    val co_number: String? = null,
     val amount: Double = 0.0,
-    val status: String
+    val status: String = "pending"
 )
 
 @Serializable
 data class DashboardRfi(
     val id: String,
-    val rfi_number: String,
-    val question: String,
-    val status: String
+    val rfi_number: String? = null,
+    val question: String? = null,
+    val status: String = "open"
 )
 
 @Serializable

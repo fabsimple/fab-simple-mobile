@@ -31,13 +31,14 @@ class PartRepositoryImpl(
             val queryParams = mutableMapOf<String, String>()
             if (projectId != null) queryParams["project_id"] = projectId
 
-            val parts: List<Part> = apiClient.get(
+            val parts: List<Part> = apiClient.getAllPages(
                 "/parts",
                 queryParams.ifEmpty { null }
             )
             localDatabase.cacheParts(parts)
             parts
         } catch (e: Exception) {
+            e.printStackTrace()
             // Offline fallback
             localDatabase.getCachedParts()
         }

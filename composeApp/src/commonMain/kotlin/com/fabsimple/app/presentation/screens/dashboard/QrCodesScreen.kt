@@ -55,6 +55,9 @@ class QrCodesScreen : Screen {
         var pdfCounts by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
         var selectedParts by remember { mutableStateOf<Set<String>>(emptySet()) }
         var missingOnly by remember { mutableStateOf(false) }
+        var searchQuery by remember { mutableStateOf("") }
+        var currentPage by remember { mutableStateOf(1) }
+        var pageSize by remember { mutableStateOf(25) }
 
         var loading by remember { mutableStateOf(false) }
         var attachmentsLoading by remember { mutableStateOf(false) }
@@ -73,29 +76,33 @@ class QrCodesScreen : Screen {
         LaunchedEffect(selectedProjectId, attachmentsRev) {
             loading = true
             error = null
+            currentPage = 1
             try {
-                // Fetch parts
+                // Fetch parts (returns ALL parts across pages)
                 val parts = AppContainer.partRepository.getParts(selectedProjectId)
                 partsList = parts
 
-                // Fetch attachment counts
+                // Fetch attachment counts in chunks of 50 to avoid URL query length caps
                 if (parts.isNotEmpty()) {
                     attachmentsLoading = true
                     try {
-                        val idsKey = parts.joinToString(",") { it.id }
-                        val attachments: List<FileAttachment> = AppContainer.apiClient.get(
-                            "/file_attachments",
-                            mapOf(
-                                "entity_type" to "parts",
-                                "entity_id__in" to idsKey
-                            )
-                        )
-                        // Group and count attachments per part
                         val counts = mutableMapOf<String, Int>()
-                        attachments.forEach { file ->
-                            val pId = file.entity_id
-                            if (pId != null) {
-                                counts[pId] = (counts[pId] ?: 0) + 1
+                        parts.chunked(50).forEach { chunk ->
+                            val idsKey = chunk.joinToString(",") { it.id }
+                            val attachments: List<FileAttachment> = try {
+                                AppContainer.apiClient.get(
+                                    "/file_attachments",
+                                    mapOf(
+                                        "entity_type" to "parts",
+                                        "entity_id__in" to idsKey
+                                    )
+                                )
+                            } catch (_: Exception) { emptyList() }
+                            attachments.forEach { file ->
+                                val pId = file.entity_id
+                                if (pId != null) {
+                                    counts[pId] = (counts[pId] ?: 0) + 1
+                                }
                             }
                         }
                         pdfCounts = counts
@@ -132,9 +139,33 @@ class QrCodesScreen : Screen {
             }
         }
 
-        val visibleParts = remember(partsList, missingOnly, pdfCounts) {
-            if (!missingOnly) partsList
-            else partsList.filter { (pdfCounts[it.id] ?: 0) == 0 }
+        val filteredParts = remember(partsList, missingOnly, pdfCounts, searchQuery) {
+            var res = if (!missingOnly) partsList else partsList.filter { (pdfCounts[it.id] ?: 0) == 0 }
+            if (searchQuery.isNotBlank()) {
+                val q = searchQuery.trim().lowercase()
+                res = res.filter { p ->
+                    p.part_mark.lowercase().contains(q) ||
+                    p.profile.lowercase().contains(q) ||
+                    (p.assembly_mark ?: "").lowercase().contains(q) ||
+                    (p.name ?: "").lowercase().contains(q)
+                }
+            }
+            res
+        }
+
+        val totalPages = remember(filteredParts, pageSize) {
+            if (pageSize <= 0) 1
+            else (filteredParts.size + pageSize - 1) / pageSize.coerceAtLeast(1)
+        }
+
+        val currentPageClamped = currentPage.coerceIn(1, totalPages.coerceAtLeast(1))
+
+        val visibleParts = remember(filteredParts, currentPageClamped, pageSize) {
+            if (pageSize <= 0) filteredParts
+            else {
+                val start = (currentPageClamped - 1) * pageSize
+                filteredParts.drop(start).take(pageSize)
+            }
         }
 
         val missingCount = remember(partsList, pdfCounts) {
@@ -149,8 +180,12 @@ class QrCodesScreen : Screen {
             }
         }
 
-        fun selectAllVisible() {
-            selectedParts = visibleParts.map { it.id }.toSet()
+        fun selectAllFiltered() {
+            selectedParts = filteredParts.map { it.id }.toSet()
+        }
+
+        fun selectPage() {
+            selectedParts = selectedParts + visibleParts.map { it.id }
         }
 
         fun clearSelection() {
@@ -230,6 +265,8 @@ class QrCodesScreen : Screen {
             onNavigate = { route ->
                 if (route == "dashboard") {
                     navigator.replaceAll(DashboardScreen())
+                } else if (route == "parts") {
+                    navigator.replaceAll(PartsListScreen())
                 } else if (route == "cut-list") {
                     navigator.replaceAll(CutOptimizerScreen())
                 } else if (route == "copilot") {
@@ -318,8 +355,15 @@ class QrCodesScreen : Screen {
                         }
 
                         FabButton(
-                            text = "Select All (${visibleParts.size})",
-                            onClick = { selectAllVisible() },
+                            text = "Select Page (${visibleParts.size})",
+                            onClick = { selectPage() },
+                            variant = ButtonVariant.Secondary,
+                            size = ButtonSize.Small
+                        )
+
+                        FabButton(
+                            text = "Select All (${filteredParts.size})",
+                            onClick = { selectAllFiltered() },
                             variant = ButtonVariant.Secondary,
                             size = ButtonSize.Small
                         )
@@ -338,6 +382,73 @@ class QrCodesScreen : Screen {
                             size = ButtonSize.Small,
                             enabled = selectedParts.isNotEmpty()
                         )
+                    }
+                }
+
+                // Search & Pagination Bar
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.width(260.dp)) {
+                        FabTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it; currentPage = 1 },
+                            placeholder = "Search parts..."
+                        )
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Page $currentPageClamped of $totalPages (${filteredParts.size} total)",
+                            style = FabType.cardSub,
+                            color = FabColors.TextMuted
+                        )
+
+                        FabButton(
+                            text = "‹ Prev",
+                            onClick = { if (currentPageClamped > 1) currentPage-- },
+                            variant = ButtonVariant.Secondary,
+                            size = ButtonSize.Small,
+                            enabled = currentPageClamped > 1
+                        )
+
+                        FabButton(
+                            text = "Next ›",
+                            onClick = { if (currentPageClamped < totalPages) currentPage++ },
+                            variant = ButtonVariant.Secondary,
+                            size = ButtonSize.Small,
+                            enabled = currentPageClamped < totalPages
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(25, 50, 100, -1).forEach { size ->
+                                val label = if (size == -1) "All" else size.toString()
+                                val isSel = pageSize == size
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (isSel) FabColors.Primary else FabTheme.extendedColors.mutedBackground)
+                                        .clickable { pageSize = size; currentPage = 1 }
+                                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = FabType.buttonSmall.copy(
+                                            color = if (isSel) Color.White else FabColors.TextPrimary,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 

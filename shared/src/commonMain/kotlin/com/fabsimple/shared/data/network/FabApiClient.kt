@@ -150,6 +150,33 @@ class FabApiClient(
         queryParams: Map<String, String>? = null
     ): T = request(path, HttpMethod.Get, queryParams = queryParams)
 
+    /**
+     * Fetch ALL pages for a resource by requesting per_page=200 and walking pages.
+     * Mirrors FabAPI.listAll() in Next.js web application.
+     */
+    suspend inline fun <reified T> getAllPages(
+        path: String,
+        queryParams: Map<String, String>? = null,
+        maxPages: Int = 25
+    ): List<T> {
+        val allRows = mutableListOf<T>()
+        val params = (queryParams ?: emptyMap()).toMutableMap()
+        params["per_page"] = "200"
+
+        for (page in 1..maxPages) {
+            params["page"] = page.toString()
+            val pageRows: List<T> = try {
+                get(path, params)
+            } catch (_: Exception) {
+                break
+            }
+            if (pageRows.isEmpty()) break
+            allRows.addAll(pageRows)
+            if (pageRows.size < 200) break
+        }
+        return allRows
+    }
+
     suspend inline fun <reified T> post(
         path: String,
         body: Any? = null

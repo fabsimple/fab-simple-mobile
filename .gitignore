@@ -1,0 +1,23 @@
+# Build outputs
+build/
+*/build/
+composeApp/build/
+shared/build/
+.gradle/
+.kotlin/
+
+# IDE files
+.idea/
+*.iml
+.navigation/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local configuration
+local.properties
+*.user
+*.suo
+*.userosv
+*.userprefs
