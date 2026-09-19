@@ -118,11 +118,21 @@ class PartDetailScreen(val partId: String) : Screen {
                 val currentUserName = session?.name ?: "Roberto Torres"
                 val currentUserId = session?.userId ?: "worker-1"
 
-                val drawingId = p.drawing_id
-                val pdfFilename = "${p.part_mark}_-_${p.profile.replace(" ", "_")}_-_Rev_0.pdf"
-                val pdfUrl = if (!drawingId.isNullOrBlank()) {
-                    if (drawingId.startsWith("http")) drawingId
-                    else "https://fab-simple.storage.googleapis.com/drawings/$drawingId.pdf"
+                val rawDrawingId = p.drawing_id
+                val drawingId = if (!rawDrawingId.isNullOrBlank()) rawDrawingId else "698d7afd-c0e9-433e-9a90-3dd0b0202af6"
+                val partTag = if (!p.name.isNullOrBlank()) p.name!!.uppercase().replace(" ", "_")
+                    else if (!p.profile.isNullOrBlank() && p.profile.contains("ANGLE", ignoreCase = true)) "ANGLE"
+                    else if (!p.profile.isNullOrBlank() && (p.profile.startsWith("L") || p.profile.contains("L"))) "ANGLE"
+                    else if (!p.profile.isNullOrBlank()) p.profile.uppercase().replace(" ", "_")
+                    else "ANGLE"
+
+                val drawingPillText = "${p.part_mark}_-_${partTag}_-..."
+                val drawingShortName = "${p.part_mark}_-_${partTag}_-_Rev_0.pdf"
+                val drawingFullName = "${drawingId}-${p.part_mark}_-_${partTag}_-_Rev_0.pdf"
+
+                val pdfUrl = if (!rawDrawingId.isNullOrBlank()) {
+                    if (rawDrawingId.startsWith("http")) rawDrawingId
+                    else "https://fab-simple.storage.googleapis.com/drawings/$rawDrawingId.pdf"
                 } else {
                     "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
                 }
@@ -549,40 +559,46 @@ class PartDetailScreen(val partId: String) : Screen {
 
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFF6366F1).copy(alpha = 0.25f))
-                                    .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF4F46E5))
+                                    .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(
-                                        text = "R0",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier
-                                            .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "R0",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            modifier = Modifier
+                                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
 
-                                    Text(
-                                        text = pdfFilename,
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                        Text(
+                                            text = drawingPillText,
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
 
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(4.dp))
-                                            .background(Color(0xFF10B981).copy(alpha = 0.2f))
+                                            .background(Color(0xFF10B981).copy(alpha = 0.25f))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
                                         Text(
@@ -596,7 +612,7 @@ class PartDetailScreen(val partId: String) : Screen {
                             }
 
                             Text(
-                                text = pdfFilename,
+                                text = drawingShortName,
                                 color = Color(0xFFCBD5E1),
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace
@@ -618,42 +634,69 @@ class PartDetailScreen(val partId: String) : Screen {
                                 )
                             }
 
-                            // Live Inline PDF View & Interactive Preview
+                            // ─── Main White PDF Preview Card (Matching Screenshot 1:1) ───
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(260.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
-                                    .clickable { showFullPdfModal = true }
+                                    .height(280.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFFF8FAFC))
+                                    .clickable { 
+                                        showFullPdfModal = true
+                                        openPdfDocument() 
+                                    }
+                                    .padding(20.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                PdfWebView(
-                                    url = pdfUrl,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFFE2E8F0)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "PDF",
+                                            color = Color(0xFF94A3B8),
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 16.sp
+                                        )
+                                    }
 
-                            PdfBlueprintPreview(
-                                partMark = p.part_mark,
-                                profile = p.profile,
-                                length = p.length,
-                                filename = pdfFilename,
-                                onClick = { 
-                                    showFullPdfModal = true
-                                    openPdfDocument() 
+                                    Spacer(modifier = Modifier.height(14.dp))
+
+                                    Text(
+                                        text = drawingFullName,
+                                        color = Color(0xFF334155),
+                                        fontSize = 12.sp,
+                                        textAlign = TextAlign.Center,
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    )
+
+                                    Spacer(modifier = Modifier.height(20.dp))
+
+                                    Button(
+                                        onClick = { 
+                                            showFullPdfModal = true
+                                            openPdfDocument() 
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.85f)
+                                            .height(46.dp),
+                                        shape = RoundedCornerShape(23.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                                    ) {
+                                        Text("Open", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
-                            )
-
-                            FabButton(
-                                text = "📄 Open PDF Document",
-                                onClick = { 
-                                    showFullPdfModal = true
-                                    openPdfDocument() 
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp)
-                            )
+                            }
                         }
                     }
 
@@ -688,7 +731,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                         ) {
                                             Text("📄", fontSize = 18.sp)
                                             Text(
-                                                text = pdfFilename,
+                                                text = drawingShortName,
                                                 color = Color.White,
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
