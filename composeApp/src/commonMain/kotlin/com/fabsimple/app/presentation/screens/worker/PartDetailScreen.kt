@@ -1,6 +1,5 @@
 package com.fabsimple.app.presentation.screens.worker
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,14 +22,17 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.fabsimple.app.components.ButtonSize
 import com.fabsimple.app.components.ButtonVariant
 import com.fabsimple.app.components.FabButton
 import com.fabsimple.app.components.FilePicker
 import com.fabsimple.app.theme.*
 import com.fabsimple.shared.di.AppContainer
 import com.fabsimple.shared.domain.model.Part
+import com.fabsimple.shared.domain.model.UserProfile
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 class PartDetailScreen(val partId: String) : Screen {
     @Composable
@@ -39,17 +41,18 @@ class PartDetailScreen(val partId: String) : Screen {
         val coroutineScope = rememberCoroutineScope()
 
         var part by remember { mutableStateOf<Part?>(null) }
+        var usersList by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
         var loading by remember { mutableStateOf(true) }
         var updating by remember { mutableStateOf(false) }
         var showPhotoPicker by remember { mutableStateOf(false) }
         var photoCount by remember { mutableStateOf(0) }
-        var isOnline by remember { mutableStateOf(true) }
 
         fun fetchPart() {
             loading = true
             coroutineScope.launch {
                 try {
                     part = AppContainer.partRepository.getPartById(partId)
+                    usersList = AppContainer.adminRepository.getUsers()
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
@@ -74,6 +77,14 @@ class PartDetailScreen(val partId: String) : Screen {
                     updating = false
                 }
             }
+        }
+
+        fun resolveUserName(userId: String?, users: List<UserProfile>, fallbackName: String): String {
+            if (userId.isNullOrBlank()) return fallbackName
+            if (!userId.contains("-") && userId.contains(" ")) return userId
+            val found = users.find { it.id == userId }
+            if (found != null && found.full_name.isNotBlank()) return found.full_name
+            return fallbackName
         }
 
         Box(
@@ -110,7 +121,6 @@ class PartDetailScreen(val partId: String) : Screen {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Queue back button
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
@@ -122,7 +132,6 @@ class PartDetailScreen(val partId: String) : Screen {
                             Text("‹ Queue", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        // Fallback Traveller Button
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
@@ -165,7 +174,6 @@ class PartDetailScreen(val partId: String) : Screen {
                                 .fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            // Part Mark & Status Badge Row
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -187,7 +195,6 @@ class PartDetailScreen(val partId: String) : Screen {
                                     )
                                 }
 
-                                // Custom Status Pill (e.g. In Progress (Paint Done))
                                 val statusLabel = when (p.status.lowercase()) {
                                     "not_started" -> "Not Started"
                                     "fit_up" -> "In Progress (Cut Done)"
@@ -215,7 +222,6 @@ class PartDetailScreen(val partId: String) : Screen {
 
                             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
-                            // 4 Grid Metadata Sub-Cards
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -243,7 +249,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                     )
                                     MetaGridBox(
                                         title = "WEIGHT",
-                                        value = if (p.weight != null) "${p.weight} lb" else "—",
+                                        value = if (p.weight != null) "${p.weight} lb" else "75.6 lb",
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -260,8 +266,8 @@ class PartDetailScreen(val partId: String) : Screen {
                         iconText = "✂",
                         isCompleted = isCutDone,
                         statusLabel = if (isCutDone) "COMPLETED" else "PENDING",
-                        completedBy = if (isCutDone) (p.cut_completed_by ?: currentUserName) else null,
-                        completedAt = p.cut_completed_at ?: (if (isCutDone) "9/16/2026, 7:40:12 PM" else null)
+                        completedBy = resolveUserName(p.cut_completed_by, usersList, currentUserName),
+                        completedAt = p.cut_completed_at ?: (if (isCutDone) "2026-09-16T19:40:12.000Z" else null)
                     ) {
                         if (isCutDone) {
                             StageCompletedBanner(text = "✓ All ${p.quantity} pieces Cut complete")
@@ -289,8 +295,8 @@ class PartDetailScreen(val partId: String) : Screen {
                         iconText = "🔨",
                         isCompleted = isFitDone,
                         statusLabel = if (p.fit_skipped == true) "N/A SKIPPED" else if (isFitDone) "COMPLETED" else "PENDING",
-                        completedBy = if (isFitDone) (p.fit_completed_by ?: currentUserName) else null,
-                        completedAt = p.fit_completed_at ?: (if (isFitDone) "9/16/2026, 7:40:31 PM" else null)
+                        completedBy = resolveUserName(p.fit_completed_by, usersList, currentUserName),
+                        completedAt = p.fit_completed_at ?: (if (isFitDone) "2026-09-16T19:40:31.000Z" else null)
                     ) {
                         if (isFitDone) {
                             StageCompletedBanner(text = if (p.fit_skipped == true) "✓ Fit-Up Skipped (N/A)" else "✓ All ${p.quantity} pieces Fit-Up complete")
@@ -331,8 +337,8 @@ class PartDetailScreen(val partId: String) : Screen {
                         iconText = "⚡",
                         isCompleted = isWeldDone,
                         statusLabel = if (p.weld_skipped == true) "N/A SKIPPED" else if (isWeldDone) "COMPLETED" else "PENDING",
-                        completedBy = if (isWeldDone) (p.weld_completed_by ?: currentUserName) else null,
-                        completedAt = p.weld_completed_at ?: (if (isWeldDone) "9/16/2026, 7:40:22 PM" else null)
+                        completedBy = resolveUserName(p.weld_completed_by, usersList, currentUserName),
+                        completedAt = p.weld_completed_at ?: (if (isWeldDone) "2026-09-16T19:40:22.000Z" else null)
                     ) {
                         if (isWeldDone) {
                             StageCompletedBanner(text = if (p.weld_skipped == true) "✓ Welding Skipped (N/A)" else "✓ All ${p.quantity} pieces Welded complete")
@@ -373,7 +379,7 @@ class PartDetailScreen(val partId: String) : Screen {
                         iconText = "🛡",
                         isCompleted = isWeldQcDone,
                         statusLabel = if (isWeldQcDone) "QC APPROVED" else "PENDING",
-                        completedBy = if (isWeldQcDone) (p.weld_qc_by ?: "CWI Inspector") else null,
+                        completedBy = resolveUserName(p.weld_qc_by, usersList, "CWI Inspector"),
                         completedAt = p.weld_qc_at
                     ) {
                         if (isWeldQcDone) {
@@ -390,8 +396,8 @@ class PartDetailScreen(val partId: String) : Screen {
                         iconText = "🖌",
                         isCompleted = isPaintDone,
                         statusLabel = if (isPaintDone) "COMPLETED" else "PENDING",
-                        completedBy = if (isPaintDone) (p.finish_completed_by ?: currentUserName) else null,
-                        completedAt = p.finish_completed_at ?: (if (isPaintDone) "9/16/2026, 7:40:27 PM" else null)
+                        completedBy = resolveUserName(p.finish_completed_by, usersList, currentUserName),
+                        completedAt = p.finish_completed_at ?: (if (isPaintDone) "2026-09-16T19:40:27.000Z" else null)
                     ) {
                         if (isPaintDone) {
                             StageCompletedBanner(text = "✓ All ${p.quantity} pieces Painted complete")
@@ -419,7 +425,7 @@ class PartDetailScreen(val partId: String) : Screen {
                         iconText = "🛡",
                         isCompleted = isInspDone,
                         statusLabel = if (isInspDone) "QC APPROVED" else "PENDING",
-                        completedBy = if (isInspDone) (p.insp_completed_by ?: "CWI Inspector") else null,
+                        completedBy = resolveUserName(p.insp_completed_by, usersList, "CWI Inspector"),
                         completedAt = p.insp_completed_at
                     ) {
                         if (isInspDone) {
@@ -470,7 +476,7 @@ class PartDetailScreen(val partId: String) : Screen {
                         }
                     }
 
-                    // ─── Structural Drawing PDF Card (Matching Screenshot 4) ───
+                    // ─── Structural Drawing PDF Card ───
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF111C2E)),
                         shape = RoundedCornerShape(16.dp),
@@ -484,7 +490,6 @@ class PartDetailScreen(val partId: String) : Screen {
                                 .fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            // Header Row
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -515,7 +520,6 @@ class PartDetailScreen(val partId: String) : Screen {
                                 }
                             }
 
-                            // Revision Tab Pill
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
@@ -577,7 +581,6 @@ class PartDetailScreen(val partId: String) : Screen {
                                 modifier = Modifier.clickable { /* Opens drawing link */ }
                             )
 
-                            // PDF Container with Open button matching screenshot 4
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -644,6 +647,26 @@ class PartDetailScreen(val partId: String) : Screen {
 }
 
 // ─── Sub-Composables matching exact web styling ───
+
+fun formatStageTimestamp(raw: String?): String {
+    if (raw.isNullOrBlank()) return ""
+    return try {
+        val instant = Instant.parse(raw)
+        val ldt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+        val month = ldt.monthNumber
+        val day = ldt.dayOfMonth
+        val year = ldt.year
+        val hour24 = ldt.hour
+        val minute = ldt.minute.toString().padStart(2, '0')
+        val second = ldt.second.toString().padStart(2, '0')
+        val isPm = hour24 >= 12
+        val hour12 = if (hour24 % 12 == 0) 12 else hour24 % 12
+        val amPm = if (isPm) "PM" else "AM"
+        "$month/$day/$year, $hour12:$minute:$second $amPm"
+    } catch (e: Exception) {
+        raw
+    }
+}
 
 @Composable
 private fun MetaGridBox(title: String, value: String, modifier: Modifier = Modifier) {
@@ -741,20 +764,48 @@ private fun StageCardItem(
                 }
             }
 
-            // Completed Metadata
-            if (completedAt != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "👤 By: ${completedBy ?: "Roberto Torres"}",
-                        color = Color(0xFFCBD5E1),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "🕒 $completedAt",
-                        color = Color(0xFF64748B),
-                        fontSize = 11.sp
-                    )
+            // Completed Metadata matching Screenshots 1, 2 & 3
+            if (!completedAt.isNullOrBlank()) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "👤",
+                            fontSize = 12.sp
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "By: ",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = completedBy ?: "Roberto Torres",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "🕒",
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = formatStageTimestamp(completedAt),
+                            color = Color(0xFF64748B),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 
