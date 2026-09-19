@@ -1,5 +1,6 @@
 package com.fabsimple.app.presentation.screens.worker
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,19 +13,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.fabsimple.app.components.ButtonVariant
 import com.fabsimple.app.components.FabButton
 import com.fabsimple.app.components.FilePicker
+import com.fabsimple.app.components.PdfWebView
 import com.fabsimple.app.theme.*
 import com.fabsimple.shared.di.AppContainer
 import com.fabsimple.shared.domain.model.Part
@@ -39,6 +47,7 @@ class PartDetailScreen(val partId: String) : Screen {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val coroutineScope = rememberCoroutineScope()
+        val uriHandler = LocalUriHandler.current
 
         var part by remember { mutableStateOf<Part?>(null) }
         var usersList by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
@@ -46,6 +55,7 @@ class PartDetailScreen(val partId: String) : Screen {
         var updating by remember { mutableStateOf(false) }
         var showPhotoPicker by remember { mutableStateOf(false) }
         var photoCount by remember { mutableStateOf(0) }
+        var showFullPdfModal by remember { mutableStateOf(false) }
 
         fun fetchPart() {
             loading = true
@@ -107,6 +117,23 @@ class PartDetailScreen(val partId: String) : Screen {
                 val session = AppContainer.authRepository.getSession()
                 val currentUserName = session?.name ?: "Roberto Torres"
                 val currentUserId = session?.userId ?: "worker-1"
+
+                val drawingId = p.drawing_id
+                val pdfFilename = "${p.part_mark}_-_${p.profile.replace(" ", "_")}_-_Rev_0.pdf"
+                val pdfUrl = if (!drawingId.isNullOrBlank()) {
+                    if (drawingId.startsWith("http")) drawingId
+                    else "https://fab-simple.storage.googleapis.com/drawings/$drawingId.pdf"
+                } else {
+                    "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+                }
+
+                fun openPdfDocument() {
+                    try {
+                        uriHandler.openUri(pdfUrl)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
 
                 Column(
                     modifier = Modifier
@@ -543,11 +570,13 @@ class PartDetailScreen(val partId: String) : Screen {
                                     )
 
                                     Text(
-                                        text = "${p.part_mark}_-_ANGLE_-...",
+                                        text = pdfFilename,
                                         color = Color.White,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
 
                                     Box(
@@ -567,82 +596,156 @@ class PartDetailScreen(val partId: String) : Screen {
                             }
 
                             Text(
-                                text = "${p.part_mark}_-_ANGLE_-_Rev_0.pdf",
+                                text = pdfFilename,
                                 color = Color(0xFFCBD5E1),
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace
                             )
 
-                            Text(
-                                text = "Open full PDF ↗",
-                                color = Color(0xFF818CF8),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.clickable { /* Opens drawing link */ }
-                            )
+                            Row(
+                                modifier = Modifier.clickable { 
+                                    showFullPdfModal = true
+                                    openPdfDocument() 
+                                },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "Open full PDF ↗",
+                                    color = Color(0xFF818CF8),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
+                            // Live Inline PDF View & Interactive Preview
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(240.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color.White)
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
+                                    .height(260.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
+                                    .clickable { showFullPdfModal = true }
+                            ) {
+                                PdfWebView(
+                                    url = pdfUrl,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+
+                            PdfBlueprintPreview(
+                                partMark = p.part_mark,
+                                profile = p.profile,
+                                length = p.length,
+                                filename = pdfFilename,
+                                onClick = { 
+                                    showFullPdfModal = true
+                                    openPdfDocument() 
+                                }
+                            )
+
+                            FabButton(
+                                text = "📄 Open PDF Document",
+                                onClick = { 
+                                    showFullPdfModal = true
+                                    openPdfDocument() 
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                            )
+                        }
+                    }
+
+                    // Full-screen PDF Modal Dialog
+                    if (showFullPdfModal) {
+                        Dialog(
+                            onDismissRequest = { showFullPdfModal = false }
+                        ) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(0.85f)
+                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(16.dp))
                             ) {
                                 Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFFF1F5F9)),
-                                        contentAlignment = Alignment.Center
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("PDF", color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("📄", fontSize = 18.sp)
+                                            Text(
+                                                text = pdfFilename,
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFF4F46E5))
+                                                    .clickable { openPdfDocument() }
+                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                            ) {
+                                                Text("Browser ↗", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFF334155))
+                                                    .clickable { showFullPdfModal = false }
+                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                            ) {
+                                                Text("✕ Close", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
                                     }
 
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    Text(
-                                        text = "698d7afd-c0e9-433e-9a90-3dd0b0202af6-${p.part_mark}_-_ANGLE_-_Rev_0.pdf",
-                                        color = Color(0xFF475569),
-                                        fontSize = 11.sp,
-                                        textAlign = TextAlign.Center,
-                                        fontFamily = FontFamily.Monospace,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(horizontal = 16.dp)
-                                    )
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    FabButton(
-                                        text = "Open",
-                                        onClick = { /* Open Drawing PDF */ },
+                                    PdfWebView(
+                                        url = pdfUrl,
                                         modifier = Modifier
-                                            .fillMaxWidth(0.85f)
-                                            .height(44.dp)
+                                            .fillMaxWidth()
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(10.dp))
                                     )
                                 }
                             }
                         }
                     }
                 }
+
+                // Photo Picker launcher
+                FilePicker(
+                    show = showPhotoPicker,
+                    onFilePicked = { _, _, _ ->
+                        photoCount++
+                        showPhotoPicker = false
+                    },
+                    onDismiss = { showPhotoPicker = false }
+                )
             }
         }
-
-        // Photo Picker launcher
-        FilePicker(
-            show = showPhotoPicker,
-            onFilePicked = { _, _, _ ->
-                photoCount++
-                showPhotoPicker = false
-            },
-            onDismiss = { showPhotoPicker = false }
-        )
     }
 }
 
@@ -855,6 +958,202 @@ private fun QcWarningInfoBox(text: String) {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
             )
+        }
+    }
+}
+
+@Composable
+private fun PdfBlueprintPreview(
+    partMark: String,
+    profile: String,
+    length: String?,
+    filename: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(230.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF0F172A))
+            .border(1.5.dp, Color(0xFF334155), RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = size.width
+            val height = size.height
+            val gridStep = 20.dp.toPx()
+
+            // Blueprint grid lines
+            var x = gridStep
+            while (x < width) {
+                drawLine(
+                    color = Color(0xFF1E293B),
+                    start = Offset(x, 0f),
+                    end = Offset(x, height),
+                    strokeWidth = 1f
+                )
+                x += gridStep
+            }
+            var y = gridStep
+            while (y < height) {
+                drawLine(
+                    color = Color(0xFF1E293B),
+                    start = Offset(0f, y),
+                    end = Offset(width, y),
+                    strokeWidth = 1f
+                )
+                y += gridStep
+            }
+
+            // Beam Outline
+            val beamTop = height * 0.35f
+            val beamBottom = height * 0.65f
+            val beamLeft = width * 0.12f
+            val beamRight = width * 0.88f
+
+            drawRect(
+                color = Color(0xFF38BDF8).copy(alpha = 0.15f),
+                topLeft = Offset(beamLeft, beamTop),
+                size = Size(beamRight - beamLeft, beamBottom - beamTop)
+            )
+            drawRect(
+                color = Color(0xFF38BDF8),
+                topLeft = Offset(beamLeft, beamTop),
+                size = Size(beamRight - beamLeft, beamBottom - beamTop),
+                style = Stroke(width = 2.5f)
+            )
+
+            // Inner Flange lines
+            val flangeThick = 12.dp.toPx()
+            drawLine(
+                color = Color(0xFF38BDF8),
+                start = Offset(beamLeft, beamTop + flangeThick),
+                end = Offset(beamRight, beamTop + flangeThick),
+                strokeWidth = 1.5f
+            )
+            drawLine(
+                color = Color(0xFF38BDF8),
+                start = Offset(beamLeft, beamBottom - flangeThick),
+                end = Offset(beamRight, beamBottom - flangeThick),
+                strokeWidth = 1.5f
+            )
+
+            // Centerline
+            drawLine(
+                color = Color(0xFFF43F5E),
+                start = Offset(beamLeft - 15f, height * 0.5f),
+                end = Offset(beamRight + 15f, height * 0.5f),
+                strokeWidth = 1.5f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 5f, 2f, 5f), 0f)
+            )
+
+            // Dimension line
+            val dimY = beamTop - 18f
+            drawLine(
+                color = Color(0xFF94A3B8),
+                start = Offset(beamLeft, dimY),
+                end = Offset(beamRight, dimY),
+                strokeWidth = 1.5f
+            )
+            drawLine(color = Color(0xFF94A3B8), start = Offset(beamLeft, dimY - 8f), end = Offset(beamLeft, dimY + 8f), strokeWidth = 1.5f)
+            drawLine(color = Color(0xFF94A3B8), start = Offset(beamRight, dimY - 8f), end = Offset(beamRight, dimY + 8f), strokeWidth = 1.5f)
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Blueprint Title Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF1E3A8A).copy(alpha = 0.9f))
+                        .border(1.dp, Color(0xFF3B82F6).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "MARK: $partMark | $profile",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF10B981).copy(alpha = 0.2f))
+                        .border(1.dp, Color(0xFF10B981).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "CAD / PDF PREVIEW",
+                        color = Color(0xFF34D399),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+
+            // Center Touch / Click Prompt
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF4F46E5))
+                    .border(1.dp, Color(0xFF818CF8), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("📄", fontSize = 13.sp)
+                    Text(
+                        text = "Tap to Open PDF (${length ?: "20'-0\""})",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Bottom Footer
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1E293B).copy(alpha = 0.95f))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = filename,
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Text(
+                    text = "OPEN FULL PDF ↗",
+                    color = Color(0xFF818CF8),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
         }
     }
 }
