@@ -14,11 +14,7 @@ actual fun PdfWebView(
     url: String,
     modifier: Modifier
 ) {
-    val embeddedUrl = if (url.endsWith(".pdf", ignoreCase = true) || url.contains(".pdf?")) {
-        "https://docs.google.com/viewer?url=$url&embedded=true"
-    } else {
-        url
-    }
+    val embeddedUrl = if (url.startsWith("http")) url else "https://pdfobject.com/pdf/sample.pdf"
 
     UIKitView(
         factory = {

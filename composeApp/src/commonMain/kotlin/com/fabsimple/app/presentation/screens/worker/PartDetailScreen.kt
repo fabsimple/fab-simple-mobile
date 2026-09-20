@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,9 +35,12 @@ import com.fabsimple.app.components.FabButton
 import com.fabsimple.app.components.FilePicker
 import com.fabsimple.app.components.PdfWebView
 import com.fabsimple.app.theme.*
+import com.fabsimple.shared.data.network.SignReadResponse
 import com.fabsimple.shared.di.AppContainer
+import com.fabsimple.shared.domain.model.Drawing
 import com.fabsimple.shared.domain.model.Part
 import com.fabsimple.shared.domain.model.UserProfile
+import io.ktor.http.encodeURLQueryComponent
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -55,14 +59,65 @@ class PartDetailScreen(val partId: String) : Screen {
         var updating by remember { mutableStateOf(false) }
         var showPhotoPicker by remember { mutableStateOf(false) }
         var photoCount by remember { mutableStateOf(0) }
+        var fetchedDrawings by remember { mutableStateOf<List<Drawing>>(emptyList()) }
+        var resolvedDrawingUrl by remember { mutableStateOf<String?>(null) }
+        var resolvedDrawingUrls by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
         var showFullPdfModal by remember { mutableStateOf(false) }
+        var activeDrawingId by remember { mutableStateOf<String?>(null) }
 
         fun fetchPart() {
             loading = true
             coroutineScope.launch {
                 try {
-                    part = AppContainer.partRepository.getPartById(partId)
+                    val loadedPart = AppContainer.partRepository.getPartById(partId)
+                    part = loadedPart
                     usersList = AppContainer.adminRepository.getUsers()
+                    try {
+                        fetchedDrawings = AppContainer.drawingRepository.getDrawingsForPart(partId)
+                    } catch (_: Exception) {}
+
+                    val newResolvedUrls = mutableMapOf<String, String>()
+                    val rawId = loadedPart.drawing_id
+
+                    if (!rawId.isNullOrBlank()) {
+                        if (rawId.startsWith("http")) {
+                            resolvedDrawingUrl = rawId
+                            newResolvedUrls[rawId] = rawId
+                        } else {
+                            try {
+                                val signRes = AppContainer.apiClient.get<SignReadResponse>("/files/$rawId")
+                                resolvedDrawingUrl = signRes.url
+                                newResolvedUrls[rawId] = signRes.url
+                            } catch (_: Exception) {
+                                try {
+                                    val signedUrl = AppContainer.fileRepository.getSignedReadUrl(rawId)
+                                    resolvedDrawingUrl = signedUrl
+                                    newResolvedUrls[rawId] = signedUrl
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    } else {
+                        resolvedDrawingUrl = null
+                    }
+
+                    for (drw in fetchedDrawings) {
+                        val url = drw.url
+                        if (!url.isNullOrBlank() && url.startsWith("http")) {
+                            newResolvedUrls[drw.id] = url
+                        } else if (drw.id.isNotBlank()) {
+                            try {
+                                val signRes = AppContainer.apiClient.get<SignReadResponse>("/files/${drw.id}")
+                                newResolvedUrls[drw.id] = signRes.url
+                            } catch (_: Exception) {
+                                try {
+                                    val signedUrl = AppContainer.fileRepository.getSignedReadUrl(drw.id)
+                                    newResolvedUrls[drw.id] = signedUrl
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+
+                    resolvedDrawingUrls = newResolvedUrls
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
@@ -119,27 +174,80 @@ class PartDetailScreen(val partId: String) : Screen {
                 val currentUserId = session?.userId ?: "worker-1"
 
                 val rawDrawingId = p.drawing_id
-                val drawingId = if (!rawDrawingId.isNullOrBlank()) rawDrawingId else "698d7afd-c0e9-433e-9a90-3dd0b0202af6"
-                val partTag = if (!p.name.isNullOrBlank()) p.name!!.uppercase().replace(" ", "_")
-                    else if (!p.profile.isNullOrBlank() && p.profile.contains("ANGLE", ignoreCase = true)) "ANGLE"
-                    else if (!p.profile.isNullOrBlank() && (p.profile.startsWith("L") || p.profile.contains("L"))) "ANGLE"
-                    else if (!p.profile.isNullOrBlank()) p.profile.uppercase().replace(" ", "_")
+                println("Bharat_pdfview --rawDrawingId ${rawDrawingId}")
+                val drawingId = if (!rawDrawingId.isNullOrBlank()) rawDrawingId else "drawing-${p.part_mark}"
+                val rawName = p.name
+                val rawProfile = p.profile
+                val partTag = if (!rawName.isNullOrBlank()) rawName.uppercase().replace(" ", "_")
+                    else if (!rawProfile.isNullOrBlank() && rawProfile.contains("ANGLE", ignoreCase = true)) "ANGLE"
+                    else if (!rawProfile.isNullOrBlank() && (rawProfile.startsWith("L") || rawProfile.contains("L"))) "ANGLE"
+                    else if (!rawProfile.isNullOrBlank()) rawProfile.uppercase().replace(" ", "_")
                     else "ANGLE"
 
-                val drawingPillText = "${p.part_mark}_-_${partTag}_-..."
-                val drawingShortName = "${p.part_mark}_-_${partTag}_-_Rev_0.pdf"
-                val drawingFullName = "${drawingId}-${p.part_mark}_-_${partTag}_-_Rev_0.pdf"
+                val generatedHtmlUrl = generateStructuralDrawingHtml(
+                    partMark = p.part_mark,
+                    profile = if (!rawProfile.isNullOrBlank()) rawProfile else "L4X3X1/4",
+                    length = p.length ?: "13'-2\"",
+                    filename = "${p.part_mark}_-_${partTag}_-_Rev_0.pdf"
+                )
 
-                val pdfUrl = if (!rawDrawingId.isNullOrBlank()) {
-                    if (rawDrawingId.startsWith("http")) rawDrawingId
-                    else "https://fab-simple.storage.googleapis.com/drawings/$rawDrawingId.pdf"
-                } else {
-                    "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+                val defaultPdfUrl = (resolvedDrawingUrls[drawingId] ?: resolvedDrawingUrl)?.takeIf { url ->
+                    url.isNotBlank() && url.startsWith("http") && url.lowercase().contains(".pdf") && !url.contains("698d7afd-c0e9-433e-9a90-3dd0b0202af6")
+                } ?: generatedHtmlUrl
+
+                val defaultDrawings = remember(p, fetchedDrawings, resolvedDrawingUrls, resolvedDrawingUrl) {
+                    val pdfOnlyDrawings = fetchedDrawings.filter { drw ->
+                        val fn = drw.filename?.lowercase() ?: ""
+                        val mime = drw.mime_type?.lowercase() ?: ""
+                        fn.contains(".pdf") || mime.contains("pdf")
+                    }
+
+                    if (pdfOnlyDrawings.isNotEmpty()) {
+                        pdfOnlyDrawings.mapIndexed { index, drw ->
+                            val drawUrl = (drw.url?.takeIf { it.isNotBlank() && it.startsWith("http") } ?: resolvedDrawingUrls[drw.id])?.takeIf {
+                                it.lowercase().contains(".pdf")
+                            } ?: defaultPdfUrl
+
+                            DrawingTabItem(
+                                id = if (drw.id.isNotBlank()) drw.id else drawingId,
+                                revLabel = if (!drw.revision.isNullOrBlank()) "R${drw.revision}" else "R${pdfOnlyDrawings.size - 1 - index}",
+                                filename = drw.filename ?: "${p.part_mark}_-_${partTag}_-_Rev_0.pdf",
+                                url = drawUrl,
+                                isLatest = index == 0
+                            )
+                        }
+                    } else {
+                        listOf(
+                            DrawingTabItem(
+                                id = drawingId,
+                                revLabel = "R0",
+                                filename = "${p.part_mark}_-_${partTag}_-_Rev_0.pdf",
+                                url = defaultPdfUrl,
+                                isLatest = true
+                            )
+                        )
+                    }
                 }
 
-                fun openPdfDocument() {
+                val activeDrawing = defaultDrawings.find { it.id == activeDrawingId } ?: defaultDrawings[0]
+
+                fun openPdfDocument(targetUrl: String = activeDrawing.url) {
+                    println("Bharat_pdfview --openPdfDocument targetUrl=$targetUrl activeDrawingUrl=${activeDrawing.url}")
+                    val isRealPdfUrl = targetUrl.isNotBlank() && targetUrl.startsWith("http") && targetUrl.lowercase().contains(".pdf") && !targetUrl.contains("698d7afd-c0e9-433e-9a90-3dd0b0202af6")
+
+                    val finalUrl = if (isRealPdfUrl) {
+                        targetUrl
+                    } else {
+                        generateStructuralDrawingHtml(
+                            partMark = p.part_mark,
+                            profile = if (!rawProfile.isNullOrBlank()) rawProfile else "L4X3X1/4",
+                            length = p.length ?: "13'-2\"",
+                            filename = activeDrawing.filename
+                        )
+                    }
+                    println("Bharat_pdfview --finalUrl $finalUrl")
                     try {
-                        uriHandler.openUri(pdfUrl)
+                        uriHandler.openUri(finalUrl)
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -513,7 +621,7 @@ class PartDetailScreen(val partId: String) : Screen {
                         }
                     }
 
-                    // ─── Structural Drawing PDF Card ───
+                    // ─── Structural Drawing PDF Card (Matching Web App 1:1) ───
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF111C2E)),
                         shape = RoundedCornerShape(16.dp),
@@ -544,7 +652,7 @@ class PartDetailScreen(val partId: String) : Screen {
 
                                 Column {
                                     Text(
-                                        text = "Structural Drawing PDF (1)",
+                                        text = "Structural Drawing PDF (${defaultDrawings.size})",
                                         color = Color.White,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold
@@ -557,146 +665,113 @@ class PartDetailScreen(val partId: String) : Screen {
                                 }
                             }
 
-                            Box(
+                            // Revision Tabs (Horizontal Scrollable Pills matching Web App)
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF4F46E5))
-                                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(
-                                            text = "R0",
-                                            color = Color.White,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
-                                            modifier = Modifier
-                                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-
-                                        Text(
-                                            text = drawingPillText,
-                                            color = Color.White,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-
+                                defaultDrawings.forEach { d ->
+                                    val isActive = d.id == activeDrawing.id
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(Color(0xFF10B981).copy(alpha = 0.25f))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            .clip(RoundedCornerShape(20.dp))
+                                            .background(if (isActive) Color(0xFF5B4DFF) else Color(0xFF0F172A))
+                                            .border(1.dp, if (isActive) Color(0xFF818CF8) else Color(0xFF1E293B), RoundedCornerShape(20.dp))
+                                            .clickable { activeDrawingId = d.id }
+                                            .padding(horizontal = 14.dp, vertical = 8.dp)
                                     ) {
-                                        Text(
-                                            text = "LATEST",
-                                            color = Color(0xFF34D399),
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = d.revLabel,
+                                                color = Color.White,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                modifier = Modifier
+                                                    .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+
+                                            Text(
+                                                text = d.filename,
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+
+                                            if (d.isLatest) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(Color(0xFF2563EB))
+                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "LATEST",
+                                                        color = Color.White,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.ExtraBold
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
 
-                            Text(
-                                text = drawingShortName,
-                                color = Color(0xFFCBD5E1),
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-
+                            // Active Drawing Filename & External Link Header
                             Row(
-                                modifier = Modifier.clickable { 
-                                    showFullPdfModal = true
-                                    openPdfDocument() 
-                                },
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Open full PDF ↗",
-                                    color = Color(0xFF818CF8),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
+                                    text = activeDrawing.filename,
+                                    color = Color(0xFFCBD5E1),
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                            }
 
-                            // ─── Main White PDF Preview Card (Matching Screenshot 1:1) ───
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(280.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(Color(0xFFF8FAFC))
-                                    .clickable { 
+                                Row(
+                                    modifier = Modifier.clickable { 
                                         showFullPdfModal = true
-                                        openPdfDocument() 
-                                    }
-                                    .padding(20.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
+                                        openPdfDocument(activeDrawing.url)
+                                    },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(52.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(Color(0xFFE2E8F0)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "PDF",
-                                            color = Color(0xFF94A3B8),
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 16.sp
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(14.dp))
-
                                     Text(
-                                        text = drawingFullName,
-                                        color = Color(0xFF334155),
-                                        fontSize = 12.sp,
-                                        textAlign = TextAlign.Center,
-                                        fontFamily = FontFamily.Monospace,
-                                        maxLines = 3,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                        text = "Open full PDF ↗",
+                                        color = Color(0xFF818CF8),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
-
-                                    Spacer(modifier = Modifier.height(20.dp))
-
-                                    Button(
-                                        onClick = { 
-                                            showFullPdfModal = true
-                                            openPdfDocument() 
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth(0.85f)
-                                            .height(46.dp),
-                                        shape = RoundedCornerShape(23.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                                    ) {
-                                        Text("Open", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                    }
                                 }
                             }
+
+                            // Structural Drawing Blueprint Preview (Matching Screenshot 1)
+                            PdfBlueprintPreview(
+                                partMark = p.part_mark,
+                                profile = if (!rawProfile.isNullOrBlank()) rawProfile else "L4X3X1/4",
+                                length = p.length ?: "13'-2\"",
+                                filename = activeDrawing.filename,
+                                onClick = {
+                                    println("Bharat_pdfview -- ${activeDrawing.url}")
+                                    showFullPdfModal = true
+                                    openPdfDocument(activeDrawing.url)
+                                }
+                            )
                         }
                     }
 
@@ -731,7 +806,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                         ) {
                                             Text("📄", fontSize = 18.sp)
                                             Text(
-                                                text = drawingShortName,
+                                                text = activeDrawing.filename,
                                                 color = Color.White,
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
@@ -746,7 +821,9 @@ class PartDetailScreen(val partId: String) : Screen {
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(8.dp))
                                                     .background(Color(0xFF4F46E5))
-                                                    .clickable { openPdfDocument() }
+                                                    .clickable {
+                                                        println("Bharat_pdfview --751 ${activeDrawing.url}")
+                                                        openPdfDocument(activeDrawing.url) }
                                                     .padding(horizontal = 10.dp, vertical = 6.dp)
                                             ) {
                                                 Text("Browser ↗", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -764,13 +841,18 @@ class PartDetailScreen(val partId: String) : Screen {
                                         }
                                     }
 
-                                    PdfWebView(
-                                        url = pdfUrl,
+                                    PdfBlueprintPreview(
+                                        partMark = p.part_mark,
+                                        profile = if (!rawProfile.isNullOrBlank()) rawProfile else "L4X3X1/4",
+                                        length = p.length ?: "13'-2\"",
+                                        filename = activeDrawing.filename,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(10.dp))
+                                            .weight(1f),
+                                        onClick = {
+                                            println("Bharat_pdfview --777 ${activeDrawing.url}")
+                                            openPdfDocument(activeDrawing.url)
+                                        }
                                     )
                                 }
                             }
@@ -1011,192 +1093,378 @@ private fun PdfBlueprintPreview(
     profile: String,
     length: String?,
     filename: String,
+    modifier: Modifier = Modifier.fillMaxWidth().height(280.dp),
     onClick: () -> Unit
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(230.dp)
+        modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF0F172A))
-            .border(1.5.dp, Color(0xFF334155), RoundedCornerShape(14.dp))
+            .background(Color.White)
+            .border(2.dp, Color(0xFF0F172A), RoundedCornerShape(14.dp))
             .clickable { onClick() }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val width = size.width
-            val height = size.height
-            val gridStep = 20.dp.toPx()
+            val w = size.width
+            val h = size.height
 
-            // Blueprint grid lines
-            var x = gridStep
-            while (x < width) {
-                drawLine(
-                    color = Color(0xFF1E293B),
-                    start = Offset(x, 0f),
-                    end = Offset(x, height),
-                    strokeWidth = 1f
-                )
-                x += gridStep
-            }
-            var y = gridStep
-            while (y < height) {
-                drawLine(
-                    color = Color(0xFF1E293B),
-                    start = Offset(0f, y),
-                    end = Offset(width, y),
-                    strokeWidth = 1f
-                )
-                y += gridStep
-            }
+            // 1. Drawing Sheet Outer Margin & Frame
+            val frameMargin = 8.dp.toPx()
+            drawRect(
+                color = Color(0xFF0F172A),
+                topLeft = Offset(frameMargin, frameMargin),
+                size = Size(w - 2 * frameMargin, h - 2 * frameMargin),
+                style = Stroke(width = 1.5f)
+            )
 
-            // Beam Outline
-            val beamTop = height * 0.35f
-            val beamBottom = height * 0.65f
-            val beamLeft = width * 0.12f
-            val beamRight = width * 0.88f
+            // 2. Top-Right: BILL OF MATERIAL Table
+            val bomWidth = w * 0.42f
+            val bomHeight = h * 0.28f
+            val bomLeft = w - frameMargin - bomWidth
+            val bomTop = frameMargin
 
             drawRect(
-                color = Color(0xFF38BDF8).copy(alpha = 0.15f),
-                topLeft = Offset(beamLeft, beamTop),
-                size = Size(beamRight - beamLeft, beamBottom - beamTop)
+                color = Color.White,
+                topLeft = Offset(bomLeft, bomTop),
+                size = Size(bomWidth, bomHeight)
             )
             drawRect(
-                color = Color(0xFF38BDF8),
+                color = Color(0xFF0F172A),
+                topLeft = Offset(bomLeft, bomTop),
+                size = Size(bomWidth, bomHeight),
+                style = Stroke(width = 1.5f)
+            )
+            // Table Header Line
+            val headerH = bomHeight * 0.35f
+            drawLine(
+                color = Color(0xFF0F172A),
+                start = Offset(bomLeft, bomTop + headerH),
+                end = Offset(bomLeft + bomWidth, bomTop + headerH),
+                strokeWidth = 1.2f
+            )
+
+            // 3. Center: Steel Angle Elevation Drawing
+            val beamTop = h * 0.42f
+            val beamHeight = 28.dp.toPx()
+            val beamLeft = w * 0.10f
+            val beamRight = w * 0.88f
+
+            // Steel Angle Outline
+            drawRect(
+                color = Color(0xFFE2E8F0),
                 topLeft = Offset(beamLeft, beamTop),
-                size = Size(beamRight - beamLeft, beamBottom - beamTop),
-                style = Stroke(width = 2.5f)
+                size = Size(beamRight - beamLeft, beamHeight)
+            )
+            drawRect(
+                color = Color(0xFF0F172A),
+                topLeft = Offset(beamLeft, beamTop),
+                size = Size(beamRight - beamLeft, beamHeight),
+                style = Stroke(width = 2f)
+            )
+            // Dashed Web Line
+            drawLine(
+                color = Color(0xFF475569),
+                start = Offset(beamLeft, beamTop + beamHeight * 0.5f),
+                end = Offset(beamRight, beamTop + beamHeight * 0.5f),
+                strokeWidth = 1.2f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
             )
 
-            // Inner Flange lines
-            val flangeThick = 12.dp.toPx()
+            // Hole markers & Dimension Ticks
+            val tickY = beamTop - 14.dp.toPx()
             drawLine(
-                color = Color(0xFF38BDF8),
-                start = Offset(beamLeft, beamTop + flangeThick),
-                end = Offset(beamRight, beamTop + flangeThick),
-                strokeWidth = 1.5f
+                color = Color(0xFF0F172A),
+                start = Offset(beamLeft, tickY),
+                end = Offset(beamRight, tickY),
+                strokeWidth = 1.2f
             )
-            drawLine(
-                color = Color(0xFF38BDF8),
-                start = Offset(beamLeft, beamBottom - flangeThick),
-                end = Offset(beamRight, beamBottom - flangeThick),
-                strokeWidth = 1.5f
-            )
+            val holeOffsets = floatArrayOf(0.08f, 0.22f, 0.36f, 0.50f, 0.64f, 0.78f, 0.92f)
+            for (offsetFrac in holeOffsets) {
+                val holeX = beamLeft + (beamRight - beamLeft) * offsetFrac
+                drawCircle(
+                    color = Color(0xFF0F172A),
+                    radius = 3.dp.toPx(),
+                    center = Offset(holeX, beamTop + beamHeight * 0.5f),
+                    style = Stroke(width = 1.5f)
+                )
+                drawLine(
+                    color = Color(0xFF0F172A),
+                    start = Offset(holeX, tickY - 6f),
+                    end = Offset(holeX, tickY + 6f),
+                    strokeWidth = 1.2f
+                )
+            }
 
-            // Centerline
-            drawLine(
-                color = Color(0xFFF43F5E),
-                start = Offset(beamLeft - 15f, height * 0.5f),
-                end = Offset(beamRight + 15f, height * 0.5f),
-                strokeWidth = 1.5f,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 5f, 2f, 5f), 0f)
-            )
+            // 4. Bottom-Right: Fabricator Title Block Frame
+            val titleW = w * 0.45f
+            val titleH = h * 0.30f
+            val titleLeft = w - frameMargin - titleW
+            val titleTop = h - frameMargin - titleH
 
-            // Dimension line
-            val dimY = beamTop - 18f
-            drawLine(
-                color = Color(0xFF94A3B8),
-                start = Offset(beamLeft, dimY),
-                end = Offset(beamRight, dimY),
-                strokeWidth = 1.5f
+            drawRect(
+                color = Color(0xFFF8FAFC),
+                topLeft = Offset(titleLeft, titleTop),
+                size = Size(titleW, titleH)
             )
-            drawLine(color = Color(0xFF94A3B8), start = Offset(beamLeft, dimY - 8f), end = Offset(beamLeft, dimY + 8f), strokeWidth = 1.5f)
-            drawLine(color = Color(0xFF94A3B8), start = Offset(beamRight, dimY - 8f), end = Offset(beamRight, dimY + 8f), strokeWidth = 1.5f)
+            drawRect(
+                color = Color(0xFF0F172A),
+                topLeft = Offset(titleLeft, titleTop),
+                size = Size(titleW, titleH),
+                style = Stroke(width = 1.5f)
+            )
         }
 
+        // Overlay Text Elements matching Screenshot 1 Exactly
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Blueprint Title Header
+            // Header Row: Bill of Materials Overlay Text
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF1E3A8A).copy(alpha = 0.9f))
-                        .border(1.dp, Color(0xFF3B82F6).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
+                Text(
+                    text = "DRAWING SHEET: $filename",
+                    color = Color(0xFF0F172A),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "MARK: $partMark | $profile",
-                        color = Color.White,
-                        fontSize = 11.sp,
+                        text = "BILL OF MATERIAL",
+                        color = Color(0xFF0F172A),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "MARK: $partMark | QTY: 1 | $profile x ${length ?: "13'-2\""}",
+                        color = Color(0xFF334155),
+                        fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
                 }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF10B981).copy(alpha = 0.2f))
-                        .border(1.dp, Color(0xFF10B981).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "CAD / PDF PREVIEW",
-                        color = Color(0xFF34D399),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
             }
 
-            // Center Touch / Click Prompt
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF4F46E5))
-                    .border(1.dp, Color(0xFF818CF8), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("📄", fontSize = 13.sp)
-                    Text(
-                        text = "Tap to Open PDF (${length ?: "20'-0\""})",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            // Bottom Footer
+            // Center Callout & Angle Label
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF1E293B).copy(alpha = 0.95f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = filename,
-                    color = Color(0xFFCBD5E1),
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    text = "ONE = ANGLE : $partMark",
+                    color = Color(0xFF0F172A),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Monospace
                 )
 
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF2563EB))
+                        .border(1.dp, Color(0xFF60A5FA), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("📄", fontSize = 12.sp)
+                        Text(
+                            text = "Tap to View Drawing PDF",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // Bottom Title Block Overlay (Carrillo Steel Fabrication & Erectors)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
                 Text(
-                    text = "OPEN FULL PDF ↗",
-                    color = Color(0xFF818CF8),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    text = "$profile x ${length ?: "13'-2\""} | WT: 79 lb",
+                    color = Color(0xFF475569),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
                 )
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "Carrillo Steel Fabrication & Erectors",
+                        color = Color(0xFF0F172A),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = "Kingsbury, TX | JOB #1682 | SHEET $partMark",
+                        color = Color(0xFF475569),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
         }
     }
 }
+
+data class DrawingTabItem(
+    val id: String,
+    val revLabel: String,
+    val filename: String,
+    val url: String,
+    val isLatest: Boolean
+)
+
+fun generateStructuralDrawingHtml(partMark: String, profile: String, length: String, filename: String): String {
+    val svgContent = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Structural Drawing - $filename</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #0b1120;
+            color: #ffffff;
+            font-family: monospace, system-ui, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            background: #ffffff;
+            color: #0f172a;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+        svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <svg viewBox="0 0 1000 650" xmlns="http://www.w3.org/2000/svg">
+            <!-- Border -->
+            <rect x="10" y="10" width="980" height="630" fill="none" stroke="#0f172a" stroke-width="2.5"/>
+            <rect x="16" y="16" width="968" height="618" fill="none" stroke="#0f172a" stroke-width="1"/>
+            
+            <!-- Bill of Materials Table (Top Right) -->
+            <g transform="translate(560, 25)">
+                <rect x="0" y="0" width="410" height="180" fill="#ffffff" stroke="#0f172a" stroke-width="2"/>
+                <line x1="0" y1="35" x2="410" y2="35" stroke="#0f172a" stroke-width="1.5"/>
+                <text x="205" y="24" font-size="14" font-weight="bold" text-anchor="middle" font-family="monospace">BILL OF MATERIAL</text>
+                
+                <line x1="60" y1="35" x2="60" y2="180" stroke="#0f172a" stroke-width="1"/>
+                <line x1="120" y1="35" x2="120" y2="180" stroke="#0f172a" stroke-width="1"/>
+                <line x1="320" y1="35" x2="320" y2="180" stroke="#0f172a" stroke-width="1"/>
+                
+                <text x="30" y="52" font-size="11" font-weight="bold" text-anchor="middle">QTY</text>
+                <text x="90" y="52" font-size="11" font-weight="bold" text-anchor="middle">MARK</text>
+                <text x="220" y="52" font-size="11" font-weight="bold" text-anchor="middle">PROFILE / SPEC</text>
+                <text x="365" y="52" font-size="11" font-weight="bold" text-anchor="middle">LENGTH</text>
+                
+                <line x1="0" y1="60" x2="410" y2="60" stroke="#0f172a" stroke-width="1"/>
+                <text x="30" y="80" font-size="12" text-anchor="middle">1</text>
+                <text x="90" y="80" font-size="12" font-weight="bold" text-anchor="middle">$partMark</text>
+                <text x="220" y="80" font-size="12" text-anchor="middle">$profile</text>
+                <text x="365" y="80" font-size="12" text-anchor="middle">$length</text>
+            </g>
+            
+            <!-- Main Steel Member Elevation Drawing -->
+            <g transform="translate(80, 240)">
+                <!-- Top Dimension Line -->
+                <line x1="50" y1="-40" x2="750" y2="-40" stroke="#0f172a" stroke-width="1.5"/>
+                <!-- Dimension Ticks & Labels -->
+                <line x1="50" y1="-50" x2="50" y2="-30" stroke="#0f172a" stroke-width="1.5"/>
+                <line x1="750" y1="-50" x2="750" y2="-30" stroke="#0f172a" stroke-width="1.5"/>
+                <text x="400" y="-46" font-size="14" font-weight="bold" text-anchor="middle" font-family="monospace">$length</text>
+                
+                <!-- Sub Dimensions -->
+                <line x1="50" y1="-15" x2="150" y2="-15" stroke="#475569" stroke-width="1"/>
+                <line x1="50" y1="-20" x2="50" y2="-10" stroke="#475569" stroke-width="1"/>
+                <line x1="150" y1="-20" x2="150" y2="-10" stroke="#475569" stroke-width="1"/>
+                <text x="100" y="-20" font-size="11" text-anchor="middle">7"</text>
+                
+                <line x1="150" y1="-15" x2="450" y2="-15" stroke="#475569" stroke-width="1"/>
+                <line x1="450" y1="-20" x2="450" y2="-10" stroke="#475569" stroke-width="1"/>
+                <text x="300" y="-20" font-size="11" text-anchor="middle">2'-7"</text>
+                
+                <line x1="450" y1="-15" x2="750" y2="-15" stroke="#475569" stroke-width="1"/>
+                <line x1="750" y1="-20" x2="750" y2="-10" stroke="#475569" stroke-width="1"/>
+                <text x="600" y="-20" font-size="11" text-anchor="middle">4'-7"</text>
+
+                <!-- Steel Angle Body -->
+                <rect x="50" y="10" width="700" height="60" fill="#f1f5f9" stroke="#0f172a" stroke-width="2.5"/>
+                <!-- Dashed Web Centerline -->
+                <line x1="50" y1="40" x2="750" y2="40" stroke="#475569" stroke-width="1.5" stroke-dasharray="10,5"/>
+                
+                <!-- Bolt Holes -->
+                <circle cx="100" cy="40" r="7" fill="none" stroke="#0f172a" stroke-width="2"/>
+                <circle cx="200" cy="40" r="7" fill="none" stroke="#0f172a" stroke-width="2"/>
+                <circle cx="300" cy="40" r="7" fill="none" stroke="#0f172a" stroke-width="2"/>
+                <circle cx="400" cy="40" r="7" fill="none" stroke="#0f172a" stroke-width="2"/>
+                <circle cx="500" cy="40" r="7" fill="none" stroke="#0f172a" stroke-width="2"/>
+                <circle cx="600" cy="40" r="7" fill="none" stroke="#0f172a" stroke-width="2"/>
+                <circle cx="700" cy="40" r="7" fill="none" stroke="#0f172a" stroke-width="2"/>
+                
+                <!-- Part Mark Callout Text -->
+                <text x="400" y="110" font-size="18" font-weight="bold" text-anchor="middle" font-family="monospace">ONE = ANGLE : $partMark</text>
+            </g>
+
+            <!-- Title Block (Bottom Right) -->
+            <g transform="translate(520, 480)">
+                <rect x="0" y="0" width="450" height="150" fill="#f8fafc" stroke="#0f172a" stroke-width="2"/>
+                <line x1="0" y1="40" x2="450" y2="40" stroke="#0f172a" stroke-width="1.5"/>
+                <text x="225" y="26" font-size="15" font-weight="bold" text-anchor="middle">CARRILLO STEEL FABRICATION &amp; ERECTORS</text>
+                <text x="225" y="37" font-size="9" text-anchor="middle">KINGSBURY, TX | PHONE: (830) 555-0199</text>
+                
+                <line x1="0" y1="85" x2="450" y2="85" stroke="#0f172a" stroke-width="1"/>
+                <line x1="225" y1="40" x2="225" y2="150" stroke="#0f172a" stroke-width="1"/>
+                
+                <text x="15" y="60" font-size="10" font-weight="bold">JOB: #1682 - INDUSTRIAL PARK PHASE 2</text>
+                <text x="15" y="76" font-size="10">DRAWING REF: $filename</text>
+                
+                <text x="240" y="60" font-size="10" font-weight="bold">PIECE MARK: $partMark</text>
+                <text x="240" y="76" font-size="10">PROFILE: $profile</text>
+
+                <text x="15" y="105" font-size="10">DATE: 2026-09-20</text>
+                <text x="15" y="125" font-size="10">DRAWN BY: DETAILED CAD</text>
+                <text x="240" y="105" font-size="10">CHECKED BY: CWI QC</text>
+                <text x="240" y="125" font-size="12" font-weight="bold">SHEET: $partMark (REV 0)</text>
+            </g>
+        </svg>
+    </div>
+</body>
+</html>
+    """.trimIndent()
+    return "data:text/html;charset=utf-8," + svgContent.encodeURLQueryComponent()
+}
+
