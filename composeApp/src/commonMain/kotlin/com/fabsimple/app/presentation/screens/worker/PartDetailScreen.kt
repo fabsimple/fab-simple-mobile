@@ -184,16 +184,9 @@ class PartDetailScreen(val partId: String) : Screen {
                     else if (!rawProfile.isNullOrBlank()) rawProfile.uppercase().replace(" ", "_")
                     else "ANGLE"
 
-                val generatedHtmlUrl = generateStructuralDrawingHtml(
-                    partMark = p.part_mark,
-                    profile = if (!rawProfile.isNullOrBlank()) rawProfile else "L4X3X1/4",
-                    length = p.length ?: "13'-2\"",
-                    filename = "${p.part_mark}_-_${partTag}_-_Rev_0.pdf"
-                )
-
                 val defaultPdfUrl = (resolvedDrawingUrls[drawingId] ?: resolvedDrawingUrl)?.takeIf { url ->
                     url.isNotBlank() && url.startsWith("http") && url.lowercase().contains(".pdf") && !url.contains("698d7afd-c0e9-433e-9a90-3dd0b0202af6")
-                } ?: generatedHtmlUrl
+                } ?: "https://mteocbcpbdgfdysulmiv.supabase.co/storage/v1/object/public/drawings/${p.part_mark}_-_${partTag}_-_Rev_0.pdf"
 
                 val defaultDrawings = remember(p, fetchedDrawings, resolvedDrawingUrls, resolvedDrawingUrl) {
                     val pdfOnlyDrawings = fetchedDrawings.filter { drw ->
@@ -233,23 +226,25 @@ class PartDetailScreen(val partId: String) : Screen {
 
                 fun openPdfDocument(targetUrl: String = activeDrawing.url) {
                     println("Bharat_pdfview --openPdfDocument targetUrl=$targetUrl activeDrawingUrl=${activeDrawing.url}")
+                    showFullPdfModal = true
+
                     val isRealPdfUrl = targetUrl.isNotBlank() && targetUrl.startsWith("http") && targetUrl.lowercase().contains(".pdf") && !targetUrl.contains("698d7afd-c0e9-433e-9a90-3dd0b0202af6")
 
                     val finalUrl = if (isRealPdfUrl) {
                         targetUrl
+                    } else if (!resolvedDrawingUrl.isNullOrBlank() && resolvedDrawingUrl!!.startsWith("http") && resolvedDrawingUrl!!.lowercase().contains(".pdf") && !resolvedDrawingUrl!!.contains("698d7afd-c0e9-433e-9a90-3dd0b0202af6")) {
+                        resolvedDrawingUrl!!
                     } else {
-                        generateStructuralDrawingHtml(
-                            partMark = p.part_mark,
-                            profile = if (!rawProfile.isNullOrBlank()) rawProfile else "L4X3X1/4",
-                            length = p.length ?: "13'-2\"",
-                            filename = activeDrawing.filename
-                        )
+                        "https://mteocbcpbdgfdysulmiv.supabase.co/storage/v1/object/public/drawings/${p.part_mark}_-_${partTag}_-_Rev_0.pdf"
                     }
+
                     println("Bharat_pdfview --finalUrl $finalUrl")
-                    try {
-                        uriHandler.openUri(finalUrl)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    if (finalUrl.startsWith("http")) {
+                        try {
+                            uriHandler.openUri(finalUrl)
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
+                        }
                     }
                 }
 
@@ -324,7 +319,10 @@ class PartDetailScreen(val partId: String) : Screen {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.Top
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     Text(
                                         text = p.part_mark,
                                         color = Color.White,
@@ -332,6 +330,24 @@ class PartDetailScreen(val partId: String) : Screen {
                                         fontWeight = FontWeight.ExtraBold,
                                         fontFamily = FontFamily.Monospace
                                     )
+
+                                    val totalQty = p.quantity.coerceAtLeast(1)
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF312E81).copy(alpha = 0.6f))
+                                            .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "QTY: $totalQty PCS",
+                                            color = Color(0xFFA5B4FC),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+
                                     Text(
                                         text = p.profile,
                                         color = Color(0xFF94A3B8),
@@ -345,23 +361,126 @@ class PartDetailScreen(val partId: String) : Screen {
                                     "fit_up" -> "In Progress (Cut Done)"
                                     "welding" -> "In Progress (Fit-Up Done)"
                                     "painting" -> "In Progress (Paint Done)"
-                                    "complete" -> "Completed"
+                                    "complete", "completed" -> "Complete"
                                     "shipped" -> "Shipped"
                                     else -> p.status.replace("_", " ")
                                 }
+                                val isCompleteStatus = p.status.lowercase() == "complete" || p.status.lowercase() == "completed" || p.status.lowercase() == "shipped"
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(20.dp))
-                                        .background(Color(0xFFF472B6).copy(alpha = 0.15f))
-                                        .border(1.dp, Color(0xFFF472B6).copy(alpha = 0.4f), RoundedCornerShape(20.dp))
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        .background(if (isCompleteStatus) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFF472B6).copy(alpha = 0.15f))
+                                        .border(1.dp, if (isCompleteStatus) Color(0xFF10B981).copy(alpha = 0.4f) else Color(0xFFF472B6).copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                                        .padding(horizontal = 14.dp, vertical = 6.dp)
                                 ) {
                                     Text(
                                         text = statusLabel,
-                                        color = Color(0xFFF472B6),
-                                        fontSize = 11.sp,
+                                        color = if (isCompleteStatus) Color(0xFF34D399) else Color(0xFFF472B6),
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
+                                }
+                            }
+
+                            // ─── Overall Batch Progress Box (Matching Screenshot) ───
+                            val totalQty = p.quantity.coerceAtLeast(1)
+                            val cutQty = if (p.cut_qty > 0) p.cut_qty else if (p.cut_completed_at != null) totalQty else 0
+                            val fitQty = if (p.fit_qty > 0) p.fit_qty else if (p.fit_completed_at != null || p.fit_skipped == true) totalQty else 0
+                            val weldQty = if (p.weld_qty > 0) p.weld_qty else if (p.weld_completed_at != null || p.weld_skipped == true) totalQty else 0
+                            val weldQcQty = if (p.weld_qc_qty > 0) p.weld_qc_qty else 0
+                            val finishQty = if (p.finish_qty > 0) p.finish_qty else if (p.finish_completed_at != null) totalQty else 0
+                            val inspQty = if (p.insp_qty > 0) p.insp_qty else 0
+
+                            val cutPct = (cutQty * 100) / totalQty
+                            val fitPct = (fitQty * 100) / totalQty
+                            val weldPct = (weldQty * 100) / totalQty
+                            val weldQcPct = (weldQcQty * 100) / totalQty
+                            val finishPct = (finishQty * 100) / totalQty
+                            val inspPct = (inspQty * 100) / totalQty
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0xFF0F172A))
+                                    .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(14.dp))
+                                    .padding(16.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text("🥞", fontSize = 14.sp)
+                                        Text(
+                                            text = "Overall Batch Progress ($totalQty pcs)",
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "$inspQty / $totalQty Final Inspected ($inspPct%)",
+                                        color = Color(0xFF818CF8),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        BatchStageProgressItem(
+                                            label = "CUT",
+                                            qtyText = "$cutQty/$totalQty",
+                                            pctText = "$cutPct%",
+                                            pctColor = Color(0xFFF59E0B),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        BatchStageProgressItem(
+                                            label = "FIT-UP",
+                                            qtyText = "$fitQty/$totalQty",
+                                            pctText = "$fitPct%",
+                                            pctColor = Color(0xFF06B6D4),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        BatchStageProgressItem(
+                                            label = "WELD",
+                                            qtyText = "$weldQty/$totalQty",
+                                            pctText = "$weldPct%",
+                                            pctColor = Color(0xFF3B82F6),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        BatchStageProgressItem(
+                                            label = "WELD QC",
+                                            qtyText = "$weldQcQty/$totalQty",
+                                            pctText = "$weldQcPct%",
+                                            pctColor = Color(0xFF8B5CF6),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        BatchStageProgressItem(
+                                            label = "PAINT",
+                                            qtyText = "$finishQty/$totalQty",
+                                            pctText = "$finishPct%",
+                                            pctColor = Color(0xFFEC4899),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        BatchStageProgressItem(
+                                            label = "FINAL INSP",
+                                            qtyText = "$inspQty/$totalQty",
+                                            pctText = "$inspPct%",
+                                            pctColor = Color(0xFF10B981),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
                                 }
                             }
 
@@ -394,7 +513,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                     )
                                     MetaGridBox(
                                         title = "WEIGHT",
-                                        value = if (p.weight != null) "${p.weight} lb" else "75.6 lb",
+                                        value = if (p.weight != null) "${p.weight} lb" else "10.73 lb",
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -921,6 +1040,52 @@ private fun MetaGridBox(title: String, value: String, modifier: Modifier = Modif
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun BatchStageProgressItem(
+    label: String,
+    qtyText: String,
+    pctText: String,
+    pctColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF111C2E))
+            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(10.dp))
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = label,
+                color = Color(0xFF94A3B8),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+            Text(
+                text = qtyText,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1
+            )
+            Text(
+                text = pctText,
+                color = pctColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
             )
         }
     }
