@@ -65,6 +65,12 @@ class PartDetailScreen(val partId: String) : Screen {
         var showFullPdfModal by remember { mutableStateOf(false) }
         var activeDrawingId by remember { mutableStateOf<String?>(null) }
 
+        var cutDropLengthText by remember { mutableStateOf("") }
+        var cutHoursState by remember { mutableStateOf(0.0) }
+        var fitHoursState by remember { mutableStateOf(0.0) }
+        var weldHoursState by remember { mutableStateOf(0.0) }
+        var paintHoursState by remember { mutableStateOf(0.0) }
+
         fun fetchPart() {
             loading = true
             coroutineScope.launch {
@@ -72,6 +78,11 @@ class PartDetailScreen(val partId: String) : Screen {
                     val loadedPart = AppContainer.partRepository.getPartById(partId)
                     part = loadedPart
                     usersList = AppContainer.adminRepository.getUsers()
+                    cutDropLengthText = loadedPart.cut_drop_length ?: ""
+                    cutHoursState = loadedPart.cut_hours ?: 0.0
+                    fitHoursState = loadedPart.fit_hours ?: 0.0
+                    weldHoursState = loadedPart.weld_hours ?: 0.0
+                    paintHoursState = loadedPart.finish_hours ?: 0.0
                     try {
                         fetchedDrawings = AppContainer.drawingRepository.getDrawingsForPart(partId)
                     } catch (_: Exception) {}
@@ -169,6 +180,14 @@ class PartDetailScreen(val partId: String) : Screen {
                 }
             } else {
                 val p = part!!
+                val totalQty = p.quantity.coerceAtLeast(1)
+                val cutQty = if (p.cut_qty > 0) p.cut_qty else if (p.cut_completed_at != null) totalQty else 0
+                val fitQty = if (p.fit_qty > 0) p.fit_qty else if (p.fit_completed_at != null || p.fit_skipped == true) totalQty else 0
+                val weldQty = if (p.weld_qty > 0) p.weld_qty else if (p.weld_completed_at != null || p.weld_skipped == true) totalQty else 0
+                val weldQcQty = if (p.weld_qc_qty > 0) p.weld_qc_qty else 0
+                val finishQty = if (p.finish_qty > 0) p.finish_qty else if (p.finish_completed_at != null) totalQty else 0
+                val inspQty = if (p.insp_qty > 0) p.insp_qty else 0
+
                 val session = AppContainer.authRepository.getSession()
                 val currentUserName = session?.name ?: "Roberto Torres"
                 val currentUserId = session?.userId ?: "worker-1"
@@ -383,14 +402,6 @@ class PartDetailScreen(val partId: String) : Screen {
                             }
 
                             // ─── Overall Batch Progress Box (Matching Screenshot) ───
-                            val totalQty = p.quantity.coerceAtLeast(1)
-                            val cutQty = if (p.cut_qty > 0) p.cut_qty else if (p.cut_completed_at != null) totalQty else 0
-                            val fitQty = if (p.fit_qty > 0) p.fit_qty else if (p.fit_completed_at != null || p.fit_skipped == true) totalQty else 0
-                            val weldQty = if (p.weld_qty > 0) p.weld_qty else if (p.weld_completed_at != null || p.weld_skipped == true) totalQty else 0
-                            val weldQcQty = if (p.weld_qc_qty > 0) p.weld_qc_qty else 0
-                            val finishQty = if (p.finish_qty > 0) p.finish_qty else if (p.finish_completed_at != null) totalQty else 0
-                            val inspQty = if (p.insp_qty > 0) p.insp_qty else 0
-
                             val cutPct = (cutQty * 100) / totalQty
                             val fitPct = (fitQty * 100) / totalQty
                             val weldPct = (weldQty * 100) / totalQty
@@ -524,7 +535,7 @@ class PartDetailScreen(val partId: String) : Screen {
                     // ─── Fabrication Stage Cards (1 through 6) ───
 
                     // 1. Cutting
-                    val isCutDone = p.cut_completed_at != null
+                    val isCutDone = p.cut_completed_at != null || cutQty >= totalQty
                     StageCardItem(
                         title = "1. Cutting (Self-Check)",
                         iconText = "✂",
@@ -534,26 +545,49 @@ class PartDetailScreen(val partId: String) : Screen {
                         completedAt = p.cut_completed_at ?: (if (isCutDone) "2026-09-16T19:40:12.000Z" else null)
                     ) {
                         if (isCutDone) {
-                            StageCompletedBanner(text = "✓ All ${p.quantity} pieces Cut complete")
+                            StageCompletedBanner(text = "✓ All $totalQty pieces Cut complete")
                         } else {
-                            FabButton(
-                                text = "✓ Complete Cutting",
-                                onClick = {
+                            BatchStageControls(
+                                stageLabel = "Cut",
+                                completedQty = cutQty,
+                                totalQty = totalQty,
+                                dropLength = cutDropLengthText,
+                                onDropLengthChange = { cutDropLengthText = it },
+                                hours = cutHoursState,
+                                onHoursChange = { cutHoursState = it },
+                                onLogBatch = { qtyToAdd ->
+                                    val newQty = (cutQty + qtyToAdd).coerceAtMost(totalQty)
                                     val now = kotlinx.datetime.Clock.System.now().toString()
-                                    updateStage(mapOf(
+                                    val isComplete = newQty >= totalQty
+                                    val payload = mutableMapOf("cut_qty" to newQty.toString())
+                                    if (cutHoursState > 0.0) payload["cut_hours"] = cutHoursState.toString()
+                                    if (cutDropLengthText.isNotBlank()) payload["cut_drop_length"] = cutDropLengthText
+                                    if (isComplete) {
+                                        payload["cut_completed_at"] = now
+                                        payload["cut_completed_by"] = currentUserId
+                                        payload["status"] = "fit_up"
+                                    }
+                                    updateStage(payload)
+                                },
+                                onLogAllRemaining = {
+                                    val now = kotlinx.datetime.Clock.System.now().toString()
+                                    val payload = mutableMapOf(
+                                        "cut_qty" to totalQty.toString(),
                                         "cut_completed_at" to now,
                                         "cut_completed_by" to currentUserId,
                                         "status" to "fit_up"
-                                    ))
+                                    )
+                                    if (cutHoursState > 0.0) payload["cut_hours"] = cutHoursState.toString()
+                                    if (cutDropLengthText.isNotBlank()) payload["cut_drop_length"] = cutDropLengthText
+                                    updateStage(payload)
                                 },
-                                modifier = Modifier.fillMaxWidth().height(46.dp),
-                                enabled = !updating
+                                updating = updating
                             )
                         }
                     }
 
                     // 2. Fit-Up
-                    val isFitDone = p.fit_completed_at != null || p.fit_skipped == true
+                    val isFitDone = p.fit_completed_at != null || p.fit_skipped == true || fitQty >= totalQty
                     StageCardItem(
                         title = "2. Fit-Up (Self-Check)",
                         iconText = "🔨",
@@ -563,39 +597,50 @@ class PartDetailScreen(val partId: String) : Screen {
                         completedAt = p.fit_completed_at ?: (if (isFitDone) "2026-09-16T19:40:31.000Z" else null)
                     ) {
                         if (isFitDone) {
-                            StageCompletedBanner(text = if (p.fit_skipped == true) "✓ Fit-Up Skipped (N/A)" else "✓ All ${p.quantity} pieces Fit-Up complete")
+                            StageCompletedBanner(text = if (p.fit_skipped == true) "✓ Fit-Up Skipped (N/A)" else "✓ All $totalQty pieces Fit-Up complete")
                         } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FabButton(
-                                    text = "✓ Complete Fit-Up",
-                                    onClick = {
-                                        val now = kotlinx.datetime.Clock.System.now().toString()
-                                        updateStage(mapOf(
-                                            "fit_completed_at" to now,
-                                            "fit_completed_by" to currentUserId,
-                                            "status" to "welding"
-                                        ))
-                                    },
-                                    modifier = Modifier.weight(1f).height(46.dp),
-                                    enabled = isCutDone && !updating
-                                )
-                                FabButton(
-                                    text = "Skip",
-                                    onClick = {
-                                        updateStage(mapOf("fit_skipped" to "true", "status" to "welding"))
-                                    },
-                                    variant = ButtonVariant.Secondary,
-                                    enabled = isCutDone && !updating
-                                )
-                            }
+                            BatchStageControls(
+                                stageLabel = "Fit-Up",
+                                completedQty = fitQty,
+                                totalQty = totalQty,
+                                hours = fitHoursState,
+                                onHoursChange = { fitHoursState = it },
+                                onLogBatch = { qtyToAdd ->
+                                    val newQty = (fitQty + qtyToAdd).coerceAtMost(totalQty)
+                                    val now = kotlinx.datetime.Clock.System.now().toString()
+                                    val isComplete = newQty >= totalQty
+                                    val payload = mutableMapOf("fit_qty" to newQty.toString())
+                                    if (fitHoursState > 0.0) payload["fit_hours"] = fitHoursState.toString()
+                                    if (isComplete) {
+                                        payload["fit_completed_at"] = now
+                                        payload["fit_completed_by"] = currentUserId
+                                        payload["status"] = "welding"
+                                    }
+                                    updateStage(payload)
+                                },
+                                onLogAllRemaining = {
+                                    val now = kotlinx.datetime.Clock.System.now().toString()
+                                    val payload = mutableMapOf(
+                                        "fit_qty" to totalQty.toString(),
+                                        "fit_completed_at" to now,
+                                        "fit_completed_by" to currentUserId,
+                                        "status" to "welding"
+                                    )
+                                    if (fitHoursState > 0.0) payload["fit_hours"] = fitHoursState.toString()
+                                    updateStage(payload)
+                                },
+                                updating = updating,
+                                enabled = isCutDone,
+                                showSkipButton = true,
+                                onSkip = {
+                                    updateStage(mapOf("fit_skipped" to "true", "fit_qty" to totalQty.toString(), "status" to "welding"))
+                                }
+                            )
                         }
                     }
 
                     // 3. Welding
-                    val isWeldDone = p.weld_completed_at != null || p.weld_skipped == true
+                    val isWeldDone = p.weld_completed_at != null || p.weld_skipped == true || weldQty >= totalQty
                     StageCardItem(
                         title = "3. Welding (AWS D1.1)",
                         iconText = "⚡",
@@ -605,34 +650,45 @@ class PartDetailScreen(val partId: String) : Screen {
                         completedAt = p.weld_completed_at ?: (if (isWeldDone) "2026-09-16T19:40:22.000Z" else null)
                     ) {
                         if (isWeldDone) {
-                            StageCompletedBanner(text = if (p.weld_skipped == true) "✓ Welding Skipped (N/A)" else "✓ All ${p.quantity} pieces Welded complete")
+                            StageCompletedBanner(text = if (p.weld_skipped == true) "✓ Welding Skipped (N/A)" else "✓ All $totalQty pieces Welded complete")
                         } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FabButton(
-                                    text = "✓ Complete Welding",
-                                    onClick = {
-                                        val now = kotlinx.datetime.Clock.System.now().toString()
-                                        updateStage(mapOf(
-                                            "weld_completed_at" to now,
-                                            "weld_completed_by" to currentUserId,
-                                            "status" to "painting"
-                                        ))
-                                    },
-                                    modifier = Modifier.weight(1f).height(46.dp),
-                                    enabled = isFitDone && !updating
-                                )
-                                FabButton(
-                                    text = "Skip",
-                                    onClick = {
-                                        updateStage(mapOf("weld_skipped" to "true", "status" to "painting"))
-                                    },
-                                    variant = ButtonVariant.Secondary,
-                                    enabled = isFitDone && !updating
-                                )
-                            }
+                            BatchStageControls(
+                                stageLabel = "Weld",
+                                completedQty = weldQty,
+                                totalQty = totalQty,
+                                hours = weldHoursState,
+                                onHoursChange = { weldHoursState = it },
+                                onLogBatch = { qtyToAdd ->
+                                    val newQty = (weldQty + qtyToAdd).coerceAtMost(totalQty)
+                                    val now = kotlinx.datetime.Clock.System.now().toString()
+                                    val isComplete = newQty >= totalQty
+                                    val payload = mutableMapOf("weld_qty" to newQty.toString())
+                                    if (weldHoursState > 0.0) payload["weld_hours"] = weldHoursState.toString()
+                                    if (isComplete) {
+                                        payload["weld_completed_at"] = now
+                                        payload["weld_completed_by"] = currentUserId
+                                        payload["status"] = "painting"
+                                    }
+                                    updateStage(payload)
+                                },
+                                onLogAllRemaining = {
+                                    val now = kotlinx.datetime.Clock.System.now().toString()
+                                    val payload = mutableMapOf(
+                                        "weld_qty" to totalQty.toString(),
+                                        "weld_completed_at" to now,
+                                        "weld_completed_by" to currentUserId,
+                                        "status" to "painting"
+                                    )
+                                    if (weldHoursState > 0.0) payload["weld_hours"] = weldHoursState.toString()
+                                    updateStage(payload)
+                                },
+                                updating = updating,
+                                enabled = isFitDone,
+                                showSkipButton = true,
+                                onSkip = {
+                                    updateStage(mapOf("weld_skipped" to "true", "weld_qty" to totalQty.toString(), "status" to "painting"))
+                                }
+                            )
                         }
                     }
 
@@ -654,7 +710,7 @@ class PartDetailScreen(val partId: String) : Screen {
                     }
 
                     // 5. Paint / Coating
-                    val isPaintDone = p.finish_completed_at != null
+                    val isPaintDone = p.finish_completed_at != null || finishQty >= totalQty
                     StageCardItem(
                         title = "5. Paint / Coating",
                         iconText = "🖌",
@@ -664,20 +720,40 @@ class PartDetailScreen(val partId: String) : Screen {
                         completedAt = p.finish_completed_at ?: (if (isPaintDone) "2026-09-16T19:40:27.000Z" else null)
                     ) {
                         if (isPaintDone) {
-                            StageCompletedBanner(text = "✓ All ${p.quantity} pieces Painted complete")
+                            StageCompletedBanner(text = "✓ All $totalQty pieces Painted complete")
                         } else {
-                            FabButton(
-                                text = "✓ Complete Paint",
-                                onClick = {
+                            BatchStageControls(
+                                stageLabel = "Paint",
+                                completedQty = finishQty,
+                                totalQty = totalQty,
+                                hours = paintHoursState,
+                                onHoursChange = { paintHoursState = it },
+                                onLogBatch = { qtyToAdd ->
+                                    val newQty = (finishQty + qtyToAdd).coerceAtMost(totalQty)
                                     val now = kotlinx.datetime.Clock.System.now().toString()
-                                    updateStage(mapOf(
+                                    val isComplete = newQty >= totalQty
+                                    val payload = mutableMapOf("finish_qty" to newQty.toString())
+                                    if (paintHoursState > 0.0) payload["finish_hours"] = paintHoursState.toString()
+                                    if (isComplete) {
+                                        payload["finish_completed_at"] = now
+                                        payload["finish_completed_by"] = currentUserId
+                                        payload["status"] = "complete"
+                                    }
+                                    updateStage(payload)
+                                },
+                                onLogAllRemaining = {
+                                    val now = kotlinx.datetime.Clock.System.now().toString()
+                                    val payload = mutableMapOf(
+                                        "finish_qty" to totalQty.toString(),
                                         "finish_completed_at" to now,
                                         "finish_completed_by" to currentUserId,
                                         "status" to "complete"
-                                    ))
+                                    )
+                                    if (paintHoursState > 0.0) payload["finish_hours"] = paintHoursState.toString()
+                                    updateStage(payload)
                                 },
-                                modifier = Modifier.fillMaxWidth().height(46.dp),
-                                enabled = isWeldDone && !updating
+                                updating = updating,
+                                enabled = isWeldDone
                             )
                         }
                     }
@@ -1204,6 +1280,258 @@ private fun StageCardItem(
 
             // Action / Status Banner
             actionContent()
+        }
+    }
+}
+
+@Composable
+private fun BatchStageControls(
+    stageLabel: String,
+    completedQty: Int,
+    totalQty: Int,
+    dropLength: String? = null,
+    onDropLengthChange: ((String) -> Unit)? = null,
+    hours: Double,
+    onHoursChange: (Double) -> Unit,
+    onLogBatch: (qtyToAdd: Int) -> Unit,
+    onLogAllRemaining: () -> Unit,
+    updating: Boolean,
+    enabled: Boolean = true,
+    showSkipButton: Boolean = false,
+    onSkip: (() -> Unit)? = null
+) {
+    val remaining = (totalQty - completedQty).coerceAtLeast(0)
+    val pct = if (totalQty > 0) (completedQty * 100) / totalQty else 0
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // 1. Progress Display Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "$completedQty",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "/ $totalQty pcs",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Text(
+                text = "$pct% done",
+                color = Color(0xFF818CF8),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+
+        // Progress Bar
+        LinearProgressIndicator(
+            progress = { (completedQty.toFloat() / totalQty.toFloat()).coerceIn(0f, 1f) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = Color(0xFF5B4DFF),
+            trackColor = Color(0xFF1E293B)
+        )
+
+        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+        // 2. Drop Length Field (Cutting Only)
+        if (onDropLengthChange != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Drop Length Recorded (Optional):",
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                OutlinedTextField(
+                    value = dropLength ?: "",
+                    onValueChange = onDropLengthChange,
+                    placeholder = {
+                        Text(
+                            text = "e.g. 4'-2\" Remnant",
+                            color = Color(0xFF475569),
+                            fontSize = 14.sp
+                        )
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFF0F172A),
+                        unfocusedContainerColor = Color(0xFF0F172A),
+                        disabledContainerColor = Color(0xFF0F172A),
+                        focusedBorderColor = Color(0xFF6366F1),
+                        unfocusedBorderColor = Color(0xFF1E293B),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        // 3. Log Hours Row
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Log Hours:",
+                color = Color(0xFFCBD5E1),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Decrement (-)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1E293B))
+                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
+                        .clickable(enabled = enabled && hours > 0.0 && !updating) {
+                            onHoursChange((hours - 0.5).coerceAtLeast(0.0))
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("-", color = if (hours > 0.0) Color.White else Color(0xFF64748B), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Hours Display Box
+                Box(
+                    modifier = Modifier
+                        .weight(1.5f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1E293B))
+                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val formattedHours = if (hours > 0.0) {
+                        if (hours % 1.0 == 0.0) "${hours.toInt()} hrs" else "$hours hrs"
+                    } else "Hours"
+                    Text(
+                        text = formattedHours,
+                        color = if (hours > 0.0) Color.White else Color(0xFF94A3B8),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Increment (+)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1E293B))
+                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
+                        .clickable(enabled = enabled && !updating) {
+                            onHoursChange(hours + 0.5)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // 4. Batch Logging Buttons
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Log $stageLabel Batch ($remaining remaining):",
+                color = Color(0xFFCBD5E1),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                listOf(1, 5, 10).forEach { batchSize ->
+                    val isBatchValid = remaining >= 1
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isBatchValid && enabled) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.5f))
+                            .border(1.dp, if (isBatchValid && enabled) Color(0xFF334155) else Color(0xFF334155).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .clickable(enabled = isBatchValid && enabled && !updating) {
+                                onLogBatch(batchSize)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "+$batchSize ${if (batchSize == 1) "pc" else "pcs"}",
+                            color = if (isBatchValid && enabled) Color.White else Color(0xFF64748B),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+
+            // Full-width Primary Action Button: +All Remaining (X pcs)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (remaining > 0 && enabled) Color(0xFF5B4DFF) else Color(0xFF3730A3))
+                    .clickable(enabled = remaining > 0 && enabled && !updating) {
+                        onLogAllRemaining()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "+All Remaining ($remaining pcs)",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            // Skip Button (for Fit-Up / Weld if applicable)
+            if (showSkipButton && onSkip != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1E293B))
+                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
+                        .clickable(enabled = enabled && !updating) { onSkip() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Skip Stage (N/A)", color = Color(0xFF94A3B8), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }
