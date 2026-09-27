@@ -1037,88 +1037,88 @@ class PartDetailScreen(val partId: String) : Screen {
                     }
 
                     // Full-screen PDF Modal Dialog
-                    if (showFullPdfModal) {
-                        Dialog(
-                            onDismissRequest = { showFullPdfModal = false }
-                        ) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .fillMaxHeight(0.85f)
-                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(16.dp))
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("📄", fontSize = 18.sp)
-                                            Text(
-                                                text = activeDrawing.filename,
-                                                color = Color.White,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                fontFamily = FontFamily.Monospace,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(Color(0xFF4F46E5))
-                                                    .clickable {
-                                                        println("Bharat_pdfview --751 ${activeDrawing.url}")
-                                                        openPdfDocument(activeDrawing.url) }
-                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                                            ) {
-                                                Text("Browser ↗", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(Color(0xFF334155))
-                                                    .clickable { showFullPdfModal = false }
-                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                                            ) {
-                                                Text("✕ Close", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-
-                                    PdfBlueprintPreview(
-                                        partMark = p.part_mark,
-                                        profile = if (!rawProfile.isNullOrBlank()) rawProfile else "L4X3X1/4",
-                                        length = p.length ?: "13'-2\"",
-                                        filename = activeDrawing.filename,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .weight(1f),
-                                        onClick = {
-                                            println("Bharat_pdfview --777 ${activeDrawing.url}")
-                                            openPdfDocument(activeDrawing.url)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
+//                    if (showFullPdfModal) {
+//                        Dialog(
+//                            onDismissRequest = { showFullPdfModal = false }
+//                        ) {
+//                            Card(
+//                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+//                                shape = RoundedCornerShape(16.dp),
+//                                modifier = Modifier
+//                                    .fillMaxWidth()
+//                                    .fillMaxHeight(0.85f)
+//                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(16.dp))
+//                            ) {
+//                                Column(
+//                                    modifier = Modifier
+//                                        .fillMaxSize()
+//                                        .padding(16.dp),
+//                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+//                                ) {
+//                                    Row(
+//                                        modifier = Modifier.fillMaxWidth(),
+//                                        horizontalArrangement = Arrangement.SpaceBetween,
+//                                        verticalAlignment = Alignment.CenterVertically
+//                                    ) {
+//                                        Row(
+//                                            verticalAlignment = Alignment.CenterVertically,
+//                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+//                                            modifier = Modifier.weight(1f)
+//                                        ) {
+//                                            Text("📄", fontSize = 18.sp)
+//                                            Text(
+//                                                text = activeDrawing.filename,
+//                                                color = Color.White,
+//                                                fontSize = 13.sp,
+//                                                fontWeight = FontWeight.Bold,
+//                                                fontFamily = FontFamily.Monospace,
+//                                                maxLines = 1,
+//                                                overflow = TextOverflow.Ellipsis
+//                                            )
+//                                        }
+//
+//                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+//                                            Box(
+//                                                modifier = Modifier
+//                                                    .clip(RoundedCornerShape(8.dp))
+//                                                    .background(Color(0xFF4F46E5))
+//                                                    .clickable {
+//                                                        println("Bharat_pdfview --751 ${activeDrawing.url}")
+//                                                        openPdfDocument(activeDrawing.url) }
+//                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+//                                            ) {
+//                                                Text("Browser ↗", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+//                                            }
+//
+//                                            Box(
+//                                                modifier = Modifier
+//                                                    .clip(RoundedCornerShape(8.dp))
+//                                                    .background(Color(0xFF334155))
+//                                                    .clickable { showFullPdfModal = false }
+//                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+//                                            ) {
+//                                                Text("✕ Close", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+//                                            }
+//                                        }
+//                                    }
+//
+//                                    PdfBlueprintPreview(
+//                                        partMark = p.part_mark,
+//                                        profile = if (!rawProfile.isNullOrBlank()) rawProfile else "L4X3X1/4",
+//                                        length = p.length ?: "13'-2\"",
+//                                        filename = activeDrawing.filename,
+//                                        modifier = Modifier
+//                                            .fillMaxWidth()
+//                                            .weight(1f),
+//                                        onClick = {
+//                                            println("Bharat_pdfview --777 ${activeDrawing.url}")
+//                                            openPdfDocument(activeDrawing.url)
+//                                        }
+//                                    )
+//                                }
+//                            }
+//                        }
+//                    }
                 }
 
                 // Photo Picker launcher
@@ -1652,112 +1652,66 @@ private fun PdfBlueprintPreview(
     profile: String,
     length: String?,
     filename: String,
-    modifier: Modifier = Modifier.fillMaxWidth().height(280.dp),
+    modifier: Modifier = Modifier.fillMaxWidth().height(230.dp),
     onClick: () -> Unit
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(Color.White)
-            .border(2.dp, Color(0xFF0F172A), RoundedCornerShape(14.dp))
+            .border(1.5.dp, Color(0xFF0F172A), RoundedCornerShape(14.dp))
             .clickable { onClick() }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
 
-            // 1. Drawing Sheet Outer Margin & Frame
-            val frameMargin = 8.dp.toPx()
+            // 1. Drawing Sheet Frame
+            val m = 8.dp.toPx()
+            val innerM = 12.dp.toPx()
+
             drawRect(
                 color = Color(0xFF0F172A),
-                topLeft = Offset(frameMargin, frameMargin),
-                size = Size(w - 2 * frameMargin, h - 2 * frameMargin),
+                topLeft = Offset(m, m),
+                size = Size(w - 2 * m, h - 2 * m),
                 style = Stroke(width = 1.5f)
             )
+            drawRect(
+                color = Color(0xFF64748B),
+                topLeft = Offset(innerM, innerM),
+                size = Size(w - 2 * innerM, h - 2 * innerM),
+                style = Stroke(width = 0.8f)
+            )
 
-            // 2. Top-Right: BILL OF MATERIAL Table
-            val bomWidth = w * 0.42f
-            val bomHeight = h * 0.28f
-            val bomLeft = w - frameMargin - bomWidth
-            val bomTop = frameMargin
+            // 2. Top-Right: BILL OF MATERIAL Box Frame
+            val bomW = (w - 2 * innerM) * 0.52f
+            val bomH = 44.dp.toPx()
+            val bomLeft = w - innerM - bomW
+            val bomTop = innerM
 
             drawRect(
-                color = Color.White,
+                color = Color(0xFFF8FAFC),
                 topLeft = Offset(bomLeft, bomTop),
-                size = Size(bomWidth, bomHeight)
+                size = Size(bomW, bomH)
             )
             drawRect(
                 color = Color(0xFF0F172A),
                 topLeft = Offset(bomLeft, bomTop),
-                size = Size(bomWidth, bomHeight),
-                style = Stroke(width = 1.5f)
+                size = Size(bomW, bomH),
+                style = Stroke(width = 1.2f)
             )
-            // Table Header Line
-            val headerH = bomHeight * 0.35f
             drawLine(
                 color = Color(0xFF0F172A),
-                start = Offset(bomLeft, bomTop + headerH),
-                end = Offset(bomLeft + bomWidth, bomTop + headerH),
-                strokeWidth = 1.2f
+                start = Offset(bomLeft, bomTop + 16.dp.toPx()),
+                end = Offset(bomLeft + bomW, bomTop + 16.dp.toPx()),
+                strokeWidth = 1f
             )
 
-            // 3. Center: Steel Angle Elevation Drawing
-            val beamTop = h * 0.42f
-            val beamHeight = 28.dp.toPx()
-            val beamLeft = w * 0.10f
-            val beamRight = w * 0.88f
-
-            // Steel Angle Outline
-            drawRect(
-                color = Color(0xFFE2E8F0),
-                topLeft = Offset(beamLeft, beamTop),
-                size = Size(beamRight - beamLeft, beamHeight)
-            )
-            drawRect(
-                color = Color(0xFF0F172A),
-                topLeft = Offset(beamLeft, beamTop),
-                size = Size(beamRight - beamLeft, beamHeight),
-                style = Stroke(width = 2f)
-            )
-            // Dashed Web Line
-            drawLine(
-                color = Color(0xFF475569),
-                start = Offset(beamLeft, beamTop + beamHeight * 0.5f),
-                end = Offset(beamRight, beamTop + beamHeight * 0.5f),
-                strokeWidth = 1.2f,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
-            )
-
-            // Hole markers & Dimension Ticks
-            val tickY = beamTop - 14.dp.toPx()
-            drawLine(
-                color = Color(0xFF0F172A),
-                start = Offset(beamLeft, tickY),
-                end = Offset(beamRight, tickY),
-                strokeWidth = 1.2f
-            )
-            val holeOffsets = floatArrayOf(0.08f, 0.22f, 0.36f, 0.50f, 0.64f, 0.78f, 0.92f)
-            for (offsetFrac in holeOffsets) {
-                val holeX = beamLeft + (beamRight - beamLeft) * offsetFrac
-                drawCircle(
-                    color = Color(0xFF0F172A),
-                    radius = 3.dp.toPx(),
-                    center = Offset(holeX, beamTop + beamHeight * 0.5f),
-                    style = Stroke(width = 1.5f)
-                )
-                drawLine(
-                    color = Color(0xFF0F172A),
-                    start = Offset(holeX, tickY - 6f),
-                    end = Offset(holeX, tickY + 6f),
-                    strokeWidth = 1.2f
-                )
-            }
-
-            // 4. Bottom-Right: Fabricator Title Block Frame
-            val titleW = w * 0.45f
-            val titleH = h * 0.30f
-            val titleLeft = w - frameMargin - titleW
-            val titleTop = h - frameMargin - titleH
+            // 3. Bottom-Right: Title Block Frame
+            val titleW = (w - 2 * innerM) * 0.50f
+            val titleH = 42.dp.toPx()
+            val titleLeft = w - innerM - titleW
+            val titleTop = h - innerM - titleH
 
             drawRect(
                 color = Color(0xFFF8FAFC),
@@ -1768,115 +1722,218 @@ private fun PdfBlueprintPreview(
                 color = Color(0xFF0F172A),
                 topLeft = Offset(titleLeft, titleTop),
                 size = Size(titleW, titleH),
-                style = Stroke(width = 1.5f)
+                style = Stroke(width = 1.2f)
             )
+
+            // 4. Center Structural Member Drawing (Perfectly Centered)
+            val topBound = bomTop + bomH + 6.dp.toPx()
+            val bottomBound = titleTop - 6.dp.toPx()
+            val drawingCenterY = (topBound + bottomBound) / 2f
+
+            val beamW = (w - 2 * innerM) * 0.74f
+            val beamH = 18.dp.toPx()
+            val beamLeft = (w - beamW) / 2f
+            val beamRight = beamLeft + beamW
+            val beamTop = drawingCenterY - beamH / 2f
+
+            // Steel Body
+            drawRect(
+                color = Color(0xFFF1F5F9),
+                topLeft = Offset(beamLeft, beamTop),
+                size = Size(beamW, beamH)
+            )
+            drawRect(
+                color = Color(0xFF0F172A),
+                topLeft = Offset(beamLeft, beamTop),
+                size = Size(beamW, beamH),
+                style = Stroke(width = 1.8f)
+            )
+
+            // Dashed Web Line
+            drawLine(
+                color = Color(0xFF475569),
+                start = Offset(beamLeft, drawingCenterY),
+                end = Offset(beamRight, drawingCenterY),
+                strokeWidth = 1.2f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
+            )
+
+            // Top Dimension Line & Extension Lines
+            val dimY = beamTop - 16.dp.toPx()
+            drawLine(
+                color = Color(0xFF0F172A),
+                start = Offset(beamLeft, dimY),
+                end = Offset(beamRight, dimY),
+                strokeWidth = 1.2f
+            )
+            drawLine(
+                color = Color(0xFF64748B),
+                start = Offset(beamLeft, beamTop - 2.dp.toPx()),
+                end = Offset(beamLeft, dimY - 4.dp.toPx()),
+                strokeWidth = 1f
+            )
+            drawLine(
+                color = Color(0xFF64748B),
+                start = Offset(beamRight, beamTop - 2.dp.toPx()),
+                end = Offset(beamRight, dimY - 4.dp.toPx()),
+                strokeWidth = 1f
+            )
+            // 45 deg Dimension Ticks
+            val tick = 4.dp.toPx()
+            drawLine(
+                color = Color(0xFF0F172A),
+                start = Offset(beamLeft - tick, dimY + tick),
+                end = Offset(beamLeft + tick, dimY - tick),
+                strokeWidth = 1.5f
+            )
+            drawLine(
+                color = Color(0xFF0F172A),
+                start = Offset(beamRight - tick, dimY + tick),
+                end = Offset(beamRight + tick, dimY - tick),
+                strokeWidth = 1.5f
+            )
+
+            // Bolt Hole Markers
+            val holeFractions = floatArrayOf(0.08f, 0.22f, 0.36f, 0.50f, 0.64f, 0.78f, 0.92f)
+            for (f in holeFractions) {
+                val hx = beamLeft + beamW * f
+                drawCircle(
+                    color = Color(0xFF0F172A),
+                    radius = 2.5.dp.toPx(),
+                    center = Offset(hx, drawingCenterY),
+                    style = Stroke(width = 1.2f)
+                )
+            }
         }
 
-        // Overlay Text Elements matching Screenshot 1 Exactly
+        // Overlay Text Elements
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header Row: Bill of Materials Overlay Text
+            // Header Row: Drawing Sheet Filename & BOM Content
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Text(
-                    text = "DRAWING SHEET: $filename",
-                    color = Color(0xFF0F172A),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(text = "📐", fontSize = 11.sp)
+                    Text(
+                        text = filename,
+                        color = Color(0xFF0F172A),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
-                Column(horizontalAlignment = Alignment.End) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(end = 4.dp)
+                ) {
                     Text(
                         text = "BILL OF MATERIAL",
                         color = Color(0xFF0F172A),
-                        fontSize = 10.sp,
+                        fontSize = 9.sp,
                         fontWeight = FontWeight.ExtraBold,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "MARK: $partMark | QTY: 1 | $profile x ${length ?: "13'-2\""}",
+                        text = "$partMark | 1 PC | $profile x ${length ?: "13'-2\""}",
                         color = Color(0xFF334155),
-                        fontSize = 9.sp,
+                        fontSize = 8.5.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
                 }
             }
 
-            // Center Callout & Angle Label
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Center Callouts
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Text(
+                    text = length ?: "13'-2\"",
+                    color = Color(0xFF0F172A),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Spacer(modifier = Modifier.height(28.dp))
                 Text(
                     text = "ONE = ANGLE : $partMark",
                     color = Color(0xFF0F172A),
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Monospace
                 )
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF2563EB))
-                        .border(1.dp, Color(0xFF60A5FA), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text("📄", fontSize = 12.sp)
-                        Text(
-                            text = "Tap to View Drawing PDF",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
 
-            // Bottom Title Block Overlay (Carrillo Steel Fabrication & Erectors)
+            // Bottom Row Overlay
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
                 Text(
-                    text = "$profile x ${length ?: "13'-2\""} | WT: 79 lb",
+                    text = "$profile x ${length ?: "13'-2\""} | 79 lb",
                     color = Color(0xFF475569),
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )
 
-                Column(horizontalAlignment = Alignment.End) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(end = 4.dp)
+                ) {
                     Text(
                         text = "Carrillo Steel Fabrication & Erectors",
                         color = Color(0xFF0F172A),
-                        fontSize = 10.sp,
+                        fontSize = 9.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
-                        text = "Kingsbury, TX | JOB #1682 | SHEET $partMark",
+                        text = "JOB #1682 | SHEET $partMark",
                         color = Color(0xFF475569),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
                 }
+            }
+        }
+
+        // Tap to View Full Drawing Badge
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFF0F172A).copy(alpha = 0.85f))
+                .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Text("🔍", fontSize = 11.sp)
+                Text(
+                    text = "Tap to View Full Drawing PDF",
+                    color = Color.White,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
