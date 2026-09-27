@@ -9,6 +9,7 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import com.fabsimple.shared.data.local.LocalDatabase
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.channels.BufferOverflow
@@ -78,7 +79,11 @@ class FabApiClient(
                         append(HttpHeaders.ContentType, "application/json")
                     }
                     if (body != null) {
-                        setBody(body)
+                        if (body is JsonElement) {
+                            setBody(body.toString())
+                        } else {
+                            setBody(body)
+                        }
                     }
                     queryParams?.forEach { (key, value) ->
                         url.parameters.append(key, value)

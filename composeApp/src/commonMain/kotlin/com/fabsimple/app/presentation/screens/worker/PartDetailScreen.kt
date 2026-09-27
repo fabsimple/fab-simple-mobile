@@ -1,5 +1,6 @@
 package com.fabsimple.app.presentation.screens.worker
 
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -142,12 +143,14 @@ class PartDetailScreen(val partId: String) : Screen {
         }
 
         fun updateStage(payload: Map<String, String>) {
+            println("Bharat_Debug -- updateStage called with payload: $payload")
             updating = true
             coroutineScope.launch {
                 try {
                     AppContainer.partRepository.updatePartStatus(partId, payload)
                     fetchPart()
                 } catch (e: Exception) {
+                    println("Bharat_Debug -- updateStage ERROR: ${e.message}")
                     e.printStackTrace()
                 } finally {
                     updating = false
@@ -190,7 +193,11 @@ class PartDetailScreen(val partId: String) : Screen {
 
                 val session = AppContainer.authRepository.getSession()
                 val currentUserName = session?.name ?: "Roberto Torres"
-                val currentUserId = session?.userId ?: "worker-1"
+                val matchedProfile = usersList.find { 
+                    it.user_id == session?.userId || it.id == session?.userId || (session?.email != null && it.email == session.email)
+                }
+                val currentUserId = matchedProfile?.id ?: session?.userId ?: "11111111-1111-1111-1111-111111111107"
+                println("Bharat_Debug -- session.userId: ${session?.userId}, matchedProfile.id: ${matchedProfile?.id}, effective currentUserId: $currentUserId")
 
                 val rawDrawingId = p.drawing_id
                 println("Bharat_pdfview --rawDrawingId ${rawDrawingId}")
@@ -544,9 +551,6 @@ class PartDetailScreen(val partId: String) : Screen {
                         completedBy = resolveUserName(p.cut_completed_by, usersList, currentUserName),
                         completedAt = p.cut_completed_at ?: (if (isCutDone) "2026-09-16T19:40:12.000Z" else null)
                     ) {
-                        if (isCutDone) {
-                            StageCompletedBanner(text = "✓ All $totalQty pieces Cut complete")
-                        } else {
                             BatchStageControls(
                                 stageLabel = "Cut",
                                 completedQty = cutQty,
@@ -565,7 +569,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                     if (isComplete) {
                                         payload["cut_completed_at"] = now
                                         payload["cut_completed_by"] = currentUserId
-                                        payload["status"] = "fit_up"
+                                        payload["status"] = "in_progress"
                                     }
                                     updateStage(payload)
                                 },
@@ -575,7 +579,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                         "cut_qty" to totalQty.toString(),
                                         "cut_completed_at" to now,
                                         "cut_completed_by" to currentUserId,
-                                        "status" to "fit_up"
+                                        "status" to "in_progress"
                                     )
                                     if (cutHoursState > 0.0) payload["cut_hours"] = cutHoursState.toString()
                                     if (cutDropLengthText.isNotBlank()) payload["cut_drop_length"] = cutDropLengthText
@@ -583,7 +587,6 @@ class PartDetailScreen(val partId: String) : Screen {
                                 },
                                 updating = updating
                             )
-                        }
                     }
 
                     // 2. Fit-Up
@@ -596,9 +599,6 @@ class PartDetailScreen(val partId: String) : Screen {
                         completedBy = resolveUserName(p.fit_completed_by, usersList, currentUserName),
                         completedAt = p.fit_completed_at ?: (if (isFitDone) "2026-09-16T19:40:31.000Z" else null)
                     ) {
-                        if (isFitDone) {
-                            StageCompletedBanner(text = if (p.fit_skipped == true) "✓ Fit-Up Skipped (N/A)" else "✓ All $totalQty pieces Fit-Up complete")
-                        } else {
                             BatchStageControls(
                                 stageLabel = "Fit-Up",
                                 completedQty = fitQty,
@@ -614,7 +614,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                     if (isComplete) {
                                         payload["fit_completed_at"] = now
                                         payload["fit_completed_by"] = currentUserId
-                                        payload["status"] = "welding"
+                                        payload["status"] = "in_progress"
                                     }
                                     updateStage(payload)
                                 },
@@ -624,19 +624,18 @@ class PartDetailScreen(val partId: String) : Screen {
                                         "fit_qty" to totalQty.toString(),
                                         "fit_completed_at" to now,
                                         "fit_completed_by" to currentUserId,
-                                        "status" to "welding"
+                                        "status" to "in_progress"
                                     )
                                     if (fitHoursState > 0.0) payload["fit_hours"] = fitHoursState.toString()
                                     updateStage(payload)
                                 },
                                 updating = updating,
                                 enabled = isCutDone,
-                                showSkipButton = true,
+                                showSkipButton = !isFitDone,
                                 onSkip = {
-                                    updateStage(mapOf("fit_skipped" to "true", "fit_qty" to totalQty.toString(), "status" to "welding"))
+                                    updateStage(mapOf("fit_skipped" to "true", "fit_qty" to totalQty.toString(), "status" to "in_progress"))
                                 }
                             )
-                        }
                     }
 
                     // 3. Welding
@@ -667,7 +666,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                     if (isComplete) {
                                         payload["weld_completed_at"] = now
                                         payload["weld_completed_by"] = currentUserId
-                                        payload["status"] = "painting"
+                                        payload["status"] = "in_progress"
                                     }
                                     updateStage(payload)
                                 },
@@ -677,7 +676,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                         "weld_qty" to totalQty.toString(),
                                         "weld_completed_at" to now,
                                         "weld_completed_by" to currentUserId,
-                                        "status" to "painting"
+                                        "status" to "in_progress"
                                     )
                                     if (weldHoursState > 0.0) payload["weld_hours"] = weldHoursState.toString()
                                     updateStage(payload)
@@ -686,7 +685,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                 enabled = isFitDone,
                                 showSkipButton = true,
                                 onSkip = {
-                                    updateStage(mapOf("weld_skipped" to "true", "weld_qty" to totalQty.toString(), "status" to "painting"))
+                                    updateStage(mapOf("weld_skipped" to "true", "weld_qty" to totalQty.toString(), "status" to "in_progress"))
                                 }
                             )
                         }
@@ -704,8 +703,41 @@ class PartDetailScreen(val partId: String) : Screen {
                     ) {
                         if (isWeldQcDone) {
                             StageCompletedBanner(text = "✓ Weld QC Sign-off Approved")
+                        } else if (!isWeldDone) {
+                            QcWarningInfoBox(text = "⚠ Welding stage must be completed before Weld QC Sign-off.")
                         } else {
-                            QcWarningInfoBox(text = "A QC inspector or CWI supervisor must sign off this stage.")
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                QcWarningInfoBox(text = "AWS D1.1 hold point: A QC inspector or CWI supervisor must sign off this stage.")
+                                Button(
+                                    onClick = {
+                                        val now = kotlinx.datetime.Clock.System.now().toString()
+                                        val payload = mutableMapOf(
+                                            "weld_qc_at" to now,
+                                            "weld_qc_by" to currentUserId
+                                        )
+                                        updateStage(payload)
+                                    },
+                                    enabled = !updating,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF4F46E5),
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    if (updating) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("Sign-off Weld Quality Control", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -737,7 +769,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                     if (isComplete) {
                                         payload["finish_completed_at"] = now
                                         payload["finish_completed_by"] = currentUserId
-                                        payload["status"] = "complete"
+                                        payload["status"] = "in_progress"
                                     }
                                     updateStage(payload)
                                 },
@@ -747,7 +779,7 @@ class PartDetailScreen(val partId: String) : Screen {
                                         "finish_qty" to totalQty.toString(),
                                         "finish_completed_at" to now,
                                         "finish_completed_by" to currentUserId,
-                                        "status" to "complete"
+                                        "status" to "in_progress"
                                     )
                                     if (paintHoursState > 0.0) payload["finish_hours"] = paintHoursState.toString()
                                     updateStage(payload)
@@ -770,8 +802,42 @@ class PartDetailScreen(val partId: String) : Screen {
                     ) {
                         if (isInspDone) {
                             StageCompletedBanner(text = "✓ Final CWI Inspection Approved")
+                        } else if (!isPaintDone) {
+                            QcWarningInfoBox(text = "⚠ Coated Finish stage must be completed before CWI Final Inspection.")
                         } else {
-                            QcWarningInfoBox(text = "Only CWI Inspectors / Supervisors can approve final sign-off.")
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                QcWarningInfoBox(text = "Only CWI Inspectors / Supervisors can approve final sign-off.")
+                                Button(
+                                    onClick = {
+                                        val now = kotlinx.datetime.Clock.System.now().toString()
+                                        val payload = mutableMapOf(
+                                            "insp_completed_at" to now,
+                                            "insp_completed_by" to currentUserId,
+                                            "status" to "complete"
+                                        )
+                                        updateStage(payload)
+                                    },
+                                    enabled = !updating,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF059669),
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    if (updating) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text("CWI Inspector Sign-off (Approved)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -1472,64 +1538,64 @@ private fun BatchStageControls(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                listOf(1, 5, 10).forEach { batchSize ->
-                    val isBatchValid = remaining >= 1
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isBatchValid && enabled) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.5f))
-                            .border(1.dp, if (isBatchValid && enabled) Color(0xFF334155) else Color(0xFF334155).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                            .clickable(enabled = isBatchValid && enabled && !updating) {
-                                onLogBatch(batchSize)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "+$batchSize ${if (batchSize == 1) "pc" else "pcs"}",
-                            color = if (isBatchValid && enabled) Color.White else Color(0xFF64748B),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                val isBatchValid = remaining >= 1
+                // +1 pc Button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isBatchValid && enabled) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.5f))
+                        .border(1.dp, if (isBatchValid && enabled) Color(0xFF334155) else Color(0xFF334155).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .clickable(enabled = isBatchValid && enabled && !updating) {
+                            onLogBatch(1)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "+1 pc",
+                        color = if (isBatchValid && enabled) Color.White else Color(0xFF64748B),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
-            }
 
-            // Full-width Primary Action Button: +All Remaining (X pcs)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (remaining > 0 && enabled) Color(0xFF5B4DFF) else Color(0xFF3730A3))
-                    .clickable(enabled = remaining > 0 && enabled && !updating) {
-                        onLogAllRemaining()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "+All Remaining ($remaining pcs)",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
+                // +All Remaining (X pcs) Primary Accent Button
+                Box(
+                    modifier = Modifier
+                        .weight(2.2f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (remaining > 0 && enabled) Color(0xFF5B4DFF) else Color(0xFF3730A3))
+                        .clickable(enabled = remaining > 0 && enabled && !updating) {
+                            onLogAllRemaining()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "+All Remaining ($remaining pcs)",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
 
             // Skip Button (for Fit-Up / Weld if applicable)
             if (showSkipButton && onSkip != null) {
+                val skipText = if (stageLabel.contains("Fit", ignoreCase = true)) "Skip Fit-Up (Single Piece Member)" else "Skip Stage (N/A)"
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(40.dp)
+                        .height(44.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color(0xFF1E293B))
                         .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
                         .clickable(enabled = enabled && !updating) { onSkip() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Skip Stage (N/A)", color = Color(0xFF94A3B8), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(skipText, color = Color(0xFF94A3B8), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

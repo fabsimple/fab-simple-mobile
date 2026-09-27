@@ -58,6 +58,7 @@ class PartRepositoryImpl(
                 when {
                     v == "true" -> put(k, true)
                     v == "false" -> put(k, false)
+                    v.toIntOrNull() != null -> put(k, v.toInt())
                     v.toDoubleOrNull() != null -> put(k, v.toDouble())
                     else -> put(k, v)
                 }

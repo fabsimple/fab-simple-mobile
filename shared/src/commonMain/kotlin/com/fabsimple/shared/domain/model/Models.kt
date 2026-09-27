@@ -1,7 +1,20 @@
+
 package com.fabsimple.shared.domain.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.nullable
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+
 
 // ─── Auth & Users ───
 
@@ -17,6 +30,7 @@ data class UserSession(
 @Serializable
 data class UserProfile(
     val id: String,
+    val user_id: String? = null,
     val full_name: String,
     val email: String? = null,
     val role: String?,
@@ -128,6 +142,48 @@ data class Estimate(
     val created_at: String? = null
 )
 
+
+object FlexibleIntSerializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleInt", PrimitiveKind.INT)
+    override fun serialize(encoder: Encoder, value: Int) = encoder.encodeInt(value)
+    override fun deserialize(decoder: Decoder): Int {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeInt()
+        val element = jsonDecoder.decodeJsonElement()
+        return when (element) {
+            is JsonPrimitive -> {
+                element.intOrNull
+                    ?: element.doubleOrNull?.toInt()
+                    ?: element.content.toIntOrNull()
+                    ?: element.content.toDoubleOrNull()?.toInt()
+                    ?: 0
+            }
+            else -> 0
+        }
+    }
+}
+
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+object FlexibleNullableIntSerializer : KSerializer<Int?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleNullableInt", PrimitiveKind.INT).nullable
+    override fun serialize(encoder: Encoder, value: Int?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeInt(value)
+    }
+    override fun deserialize(decoder: Decoder): Int? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeInt()
+        if (!jsonDecoder.decodeNotNullMark()) return jsonDecoder.decodeNull()
+        val element = jsonDecoder.decodeJsonElement()
+        return when (element) {
+            is JsonPrimitive -> {
+                element.intOrNull
+                    ?: element.doubleOrNull?.toInt()
+                    ?: element.content.toIntOrNull()
+                    ?: element.content.toDoubleOrNull()?.toInt()
+            }
+            else -> null
+        }
+    }
+}
+
 // ─── Parts & Production ───
 
 @Serializable
@@ -141,7 +197,7 @@ data class Part(
     val grade: String? = null,
     val length: String? = null,
     val weight: Double? = null,
-    val quantity: Int = 1,
+    @Serializable(with = FlexibleIntSerializer::class) val quantity: Int = 1,
     val status: String = "not_started",
     val phase: String? = null,
     val heat_number: String? = null,
@@ -155,7 +211,7 @@ data class Part(
     val finish: String? = null,
     val project_name: String? = null,
     val project_number: String? = null,
-    val sequence: Int? = null,
+    @Serializable(with = FlexibleNullableIntSerializer::class) val sequence: Int? = null,
     // Production timestamps & flags
     val cut_completed_by: String? = null,
     val cut_completed_at: String? = null,
@@ -178,12 +234,12 @@ data class Part(
     val insp_completed_at: String? = null,
     val material_lot_id: String? = null,
     val stage_label: String? = null,
-    val cut_qty: Int = 0,
-    val fit_qty: Int = 0,
-    val weld_qty: Int = 0,
-    val weld_qc_qty: Int = 0,
-    val finish_qty: Int = 0,
-    val insp_qty: Int = 0
+    @Serializable(with = FlexibleIntSerializer::class) val cut_qty: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class) val fit_qty: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class) val weld_qty: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class) val weld_qc_qty: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class) val finish_qty: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class) val insp_qty: Int = 0
 )
 
 @Serializable

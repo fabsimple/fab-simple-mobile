@@ -36,15 +36,16 @@ class AuthRepositoryImpl(
         val accessToken = tokenResp.access_token
         val authId = tokenResp.user.id
         val userRole = tokenResp.user.app_metadata?.role
-
+        println("Bharat_authId ${authId}")
         // 2. Cache token so subsequent API calls are authorized
         localDatabase.saveAuthToken(accessToken)
 
         // 3. Fetch user profile/role
         val users: List<UserProfile> = apiClient.get("/users")
-        val profile = users.firstOrNull { it.id == authId }
+        val profile = users.firstOrNull { it.user_id == authId || it.id == authId }
             ?: UserProfile(id = authId, full_name = email.substringBefore("@"), role = userRole)
 
+        println("Bharat_authId ${profile}")
         // 4. Persist session locally
         localDatabase.saveUserId(profile.id)
         localDatabase.saveUserName(profile.full_name)
