@@ -17,6 +17,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.fabsimple.app.components.FabButton
 import com.fabsimple.app.components.FabTextField
+import com.fabsimple.app.presentation.screens.utilities.PrivacyPolicyScreen
 import com.fabsimple.app.theme.*
 import com.fabsimple.shared.di.AppContainer
 import kotlinx.coroutines.launch
@@ -121,7 +122,7 @@ class SignUpScreen : Screen {
                         visualTransformation = PasswordVisualTransformation()
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     FabButton(
                         text = "Sign Up",
@@ -149,15 +150,32 @@ class SignUpScreen : Screen {
                         enabled = !loading
                     )
 
-                    TextButton(
-                        onClick = { navigator.pop() }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Back to Sign In",
-                            color = Color(0xFF818CF8),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        TextButton(
+                            onClick = { navigator.pop() }
+                        ) {
+                            Text(
+                                text = "Back to Sign In",
+                                color = Color(0xFF818CF8),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        TextButton(
+                            onClick = { navigator.push(PrivacyPolicyScreen()) }
+                        ) {
+                            Text(
+                                text = "Privacy Policy",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }

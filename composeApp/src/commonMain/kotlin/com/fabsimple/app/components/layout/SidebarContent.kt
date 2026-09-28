@@ -52,27 +52,9 @@ fun SidebarContent(
                 .fillMaxWidth()
                 .height(64.dp)
                 .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.White.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                // Subtle square grid svg fallback logo
-                Text("❖", color = Color.White, fontSize = 18.sp)
-            }
-
-            Text(
-                text = "FabSimple",
-                color = Color.White,
-                style = FabType.cardTitle,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
-            )
+            FabLogoHeader(iconSize = 34.dp)
         }
 
         Divider(color = FabColors.SidebarBorder)

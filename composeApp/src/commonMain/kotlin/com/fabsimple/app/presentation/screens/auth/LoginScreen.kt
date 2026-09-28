@@ -17,6 +17,8 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.fabsimple.app.components.FabButton
 import com.fabsimple.app.components.FabTextField
+import com.fabsimple.app.components.layout.FabLogoHeader
+import com.fabsimple.app.presentation.screens.utilities.PrivacyPolicyScreen
 import com.fabsimple.app.theme.*
 import com.fabsimple.shared.di.AppContainer
 import kotlinx.coroutines.launch
@@ -57,6 +59,8 @@ class LoginScreen(private val initialErrorMessage: String? = null) : Screen {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    FabLogoHeader(iconSize = 42.dp)
+
                     Text(
                         text = "Sign In",
                         color = Color.White,
@@ -92,7 +96,7 @@ class LoginScreen(private val initialErrorMessage: String? = null) : Screen {
                         visualTransformation = PasswordVisualTransformation()
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     FabButton(
                         text = "Sign In",
@@ -147,6 +151,17 @@ class LoginScreen(private val initialErrorMessage: String? = null) : Screen {
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+
+                    TextButton(
+                        onClick = { navigator.push(PrivacyPolicyScreen()) }
+                    ) {
+                        Text(
+                            text = "Privacy Policy & Data Safety",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }

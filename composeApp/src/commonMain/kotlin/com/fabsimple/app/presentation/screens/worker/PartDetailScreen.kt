@@ -33,7 +33,9 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.fabsimple.app.components.ButtonVariant
 import com.fabsimple.app.components.FabButton
+import com.fabsimple.app.components.CameraPhotoPicker
 import com.fabsimple.app.components.FilePicker
+import com.fabsimple.shared.domain.model.FileAttachment
 import com.fabsimple.app.components.PdfWebView
 import com.fabsimple.app.theme.*
 import com.fabsimple.shared.data.network.SignReadResponse
@@ -60,6 +62,24 @@ class PartDetailScreen(val partId: String) : Screen {
         var updating by remember { mutableStateOf(false) }
         var showPhotoPicker by remember { mutableStateOf(false) }
         var photoCount by remember { mutableStateOf(0) }
+        var photoAttachments by remember { mutableStateOf<List<FileAttachment>>(emptyList()) }
+        var photoUploading by remember { mutableStateOf(false) }
+        var photoError by remember { mutableStateOf<String?>(null) }
+
+        fun fetchPhotos() {
+            coroutineScope.launch {
+                try {
+                    val files = AppContainer.fileRepository.getFilesForEntity("parts", partId)
+                    photoAttachments = files.filter {
+                        it.storage_bucket == "photos" ||
+                        it.mime_type?.startsWith("image/") == true ||
+                        it.storage_path.lowercase().let { p ->
+                            p.endsWith(".jpg") || p.endsWith(".jpeg") || p.endsWith(".png") || p.endsWith(".webp")
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
         var fetchedDrawings by remember { mutableStateOf<List<Drawing>>(emptyList()) }
         var resolvedDrawingUrl by remember { mutableStateOf<String?>(null) }
         var resolvedDrawingUrls by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -855,29 +875,160 @@ class PartDetailScreen(val partId: String) : Screen {
                                 .fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Text(
-                                text = "Shop Floor Photo Log",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF1E293B))
-                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(12.dp))
-                                    .clickable { showPhotoPicker = true }
-                                    .padding(vertical = 14.dp),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (photoCount > 0) "📷 Snapshot ($photoCount uploaded)" else "📷 Snapshot (DFT Gauge / Weld)",
+                                    text = "Shop Floor Photo Log",
                                     color = Color.White,
-                                    fontSize = 14.sp,
+                                    fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+
+                                val totalCount = if (photoAttachments.isNotEmpty()) photoAttachments.size else photoCount
+                                if (totalCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(20.dp))
+                                            .background(Color(0xFF6366F1).copy(alpha = 0.2f))
+                                            .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "$totalCount snapshot${if (totalCount > 1) "s" else ""}",
+                                            color = Color(0xFFA5B4FC),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            Button(
+                                onClick = { showPhotoPicker = true },
+                                enabled = !photoUploading,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(54.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF334155),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                if (photoUploading) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            color = Color(0xFFA5B4FC),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Text(
+                                            text = "Uploading to Cloud…",
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                } else {
+                                    val count = if (photoAttachments.isNotEmpty()) photoAttachments.size else photoCount
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text("📷", fontSize = 16.sp)
+                                        Text(
+                                            text = if (count > 0) "Attach another photo ($count logged)" else "Snapshot (DFT Gauge / Weld)",
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (!photoError.isNullOrBlank()) {
+                                Text(
+                                    text = photoError!!,
+                                    color = Color(0xFFF87171),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+
+                            // QC & DFT Gauge Snapshots Grid
+                            if (photoAttachments.isNotEmpty()) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "DFT Gauge & Weld Snapshots (${photoAttachments.size})",
+                                        color = Color(0xFFCBD5E1),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        photoAttachments.chunked(2).forEach { rowItems ->
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                rowItems.forEach { photoItem ->
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .height(95.dp)
+                                                            .clip(RoundedCornerShape(10.dp))
+                                                            .background(Color(0xFF0F172A))
+                                                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
+                                                            .clickable {
+                                                                coroutineScope.launch {
+                                                                    try {
+                                                                        val url = AppContainer.fileRepository.getSignedReadUrl(photoItem.id)
+                                                                        uriHandler.openUri(url)
+                                                                    } catch (_: Exception) {}
+                                                                }
+                                                            }
+                                                            .padding(10.dp),
+                                                        contentAlignment = Alignment.BottomStart
+                                                    ) {
+                                                        Column(
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            verticalArrangement = Arrangement.SpaceBetween
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .clip(RoundedCornerShape(6.dp))
+                                                                    .background(Color(0xFF4F46E5).copy(alpha = 0.3f))
+                                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Text("📷 PHOTO", color = Color(0xFF818CF8), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                            }
+                                                            Text(
+                                                                text = photoItem.storage_path.split("/").last(),
+                                                                color = Color.White,
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                if (rowItems.size == 1) {
+                                                    Spacer(modifier = Modifier.weight(1f))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -941,11 +1092,11 @@ class PartDetailScreen(val partId: String) : Screen {
                                             .background(if (isActive) Color(0xFF5B4DFF) else Color(0xFF0F172A))
                                             .border(1.dp, if (isActive) Color(0xFF818CF8) else Color(0xFF1E293B), RoundedCornerShape(20.dp))
                                             .clickable { activeDrawingId = d.id }
-                                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             Text(
                                                 text = d.revLabel,
@@ -961,11 +1112,12 @@ class PartDetailScreen(val partId: String) : Screen {
                                             Text(
                                                 text = d.filename,
                                                 color = Color.White,
-                                                fontSize = 12.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = FontFamily.Monospace,
                                                 maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.widthIn(max = 180.dp)
                                             )
 
                                             if (d.isLatest) {
@@ -1121,12 +1273,31 @@ class PartDetailScreen(val partId: String) : Screen {
 //                    }
                 }
 
-                // Photo Picker launcher
-                FilePicker(
+                // Camera & Photo Picker launcher (Android & iOS)
+                CameraPhotoPicker(
                     show = showPhotoPicker,
-                    onFilePicked = { _, _, _ ->
-                        photoCount++
+                    onPhotoCaptured = { filename, bytes, mimeType ->
                         showPhotoPicker = false
+                        coroutineScope.launch {
+                            photoUploading = true
+                            photoError = null
+                            try {
+                                AppContainer.fileRepository.uploadFile(
+                                    entityType = "parts",
+                                    entityId = partId,
+                                    filename = filename,
+                                    bytes = bytes,
+                                    contentType = mimeType,
+                                    bucket = "photos"
+                                )
+                                photoCount++
+                                fetchPhotos()
+                            } catch (e: Exception) {
+                                photoError = e.message ?: "Failed to upload photo"
+                            } finally {
+                                photoUploading = false
+                            }
+                        }
                     },
                     onDismiss = { showPhotoPicker = false }
                 )
@@ -1652,7 +1823,7 @@ private fun PdfBlueprintPreview(
     profile: String,
     length: String?,
     filename: String,
-    modifier: Modifier = Modifier.fillMaxWidth().height(230.dp),
+    modifier: Modifier = Modifier.fillMaxWidth().height(260.dp),
     onClick: () -> Unit
 ) {
     Box(
@@ -1666,15 +1837,15 @@ private fun PdfBlueprintPreview(
             val w = size.width
             val h = size.height
 
-            // 1. Drawing Sheet Frame
-            val m = 8.dp.toPx()
-            val innerM = 12.dp.toPx()
+            // 1. Sheet Frame
+            val m = 10.dp.toPx()
+            val innerM = 14.dp.toPx()
 
             drawRect(
                 color = Color(0xFF0F172A),
                 topLeft = Offset(m, m),
                 size = Size(w - 2 * m, h - 2 * m),
-                style = Stroke(width = 1.5f)
+                style = Stroke(width = 2f)
             )
             drawRect(
                 color = Color(0xFF64748B),
@@ -1683,9 +1854,9 @@ private fun PdfBlueprintPreview(
                 style = Stroke(width = 0.8f)
             )
 
-            // 2. Top-Right: BILL OF MATERIAL Box Frame
-            val bomW = (w - 2 * innerM) * 0.52f
-            val bomH = 44.dp.toPx()
+            // 2. Top-Right: BILL OF MATERIAL Box
+            val bomW = (w - 2 * innerM) * 0.46f
+            val bomH = 46.dp.toPx()
             val bomLeft = w - innerM - bomW
             val bomTop = innerM
 
@@ -1702,14 +1873,14 @@ private fun PdfBlueprintPreview(
             )
             drawLine(
                 color = Color(0xFF0F172A),
-                start = Offset(bomLeft, bomTop + 16.dp.toPx()),
-                end = Offset(bomLeft + bomW, bomTop + 16.dp.toPx()),
+                start = Offset(bomLeft, bomTop + 18.dp.toPx()),
+                end = Offset(bomLeft + bomW, bomTop + 18.dp.toPx()),
                 strokeWidth = 1f
             )
 
-            // 3. Bottom-Right: Title Block Frame
-            val titleW = (w - 2 * innerM) * 0.50f
-            val titleH = 42.dp.toPx()
+            // 3. Bottom-Right: Title Block Box
+            val titleW = (w - 2 * innerM) * 0.46f
+            val titleH = 44.dp.toPx()
             val titleLeft = w - innerM - titleW
             val titleTop = h - innerM - titleH
 
@@ -1725,16 +1896,16 @@ private fun PdfBlueprintPreview(
                 style = Stroke(width = 1.2f)
             )
 
-            // 4. Center Structural Member Drawing (Perfectly Centered)
-            val topBound = bomTop + bomH + 6.dp.toPx()
-            val bottomBound = titleTop - 6.dp.toPx()
-            val drawingCenterY = (topBound + bottomBound) / 2f
+            // 4. Center Structural Member Drawing
+            val topBound = bomTop + bomH + 12.dp.toPx()
+            val bottomBound = titleTop - 12.dp.toPx()
+            val centerY = (topBound + bottomBound) / 2f
 
-            val beamW = (w - 2 * innerM) * 0.74f
+            val beamW = (w - 2 * innerM) * 0.72f
             val beamH = 18.dp.toPx()
             val beamLeft = (w - beamW) / 2f
             val beamRight = beamLeft + beamW
-            val beamTop = drawingCenterY - beamH / 2f
+            val beamTop = centerY - beamH / 2f
 
             // Steel Body
             drawRect(
@@ -1749,17 +1920,17 @@ private fun PdfBlueprintPreview(
                 style = Stroke(width = 1.8f)
             )
 
-            // Dashed Web Line
+            // Dashed Web Centerline
             drawLine(
                 color = Color(0xFF475569),
-                start = Offset(beamLeft, drawingCenterY),
-                end = Offset(beamRight, drawingCenterY),
+                start = Offset(beamLeft, centerY),
+                end = Offset(beamRight, centerY),
                 strokeWidth = 1.2f,
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
             )
 
-            // Top Dimension Line & Extension Lines
-            val dimY = beamTop - 16.dp.toPx()
+            // Top Dimension Line
+            val dimY = beamTop - 18.dp.toPx()
             drawLine(
                 color = Color(0xFF0F172A),
                 start = Offset(beamLeft, dimY),
@@ -1793,147 +1964,157 @@ private fun PdfBlueprintPreview(
                 strokeWidth = 1.5f
             )
 
-            // Bolt Hole Markers
+            // Bolt Holes
             val holeFractions = floatArrayOf(0.08f, 0.22f, 0.36f, 0.50f, 0.64f, 0.78f, 0.92f)
             for (f in holeFractions) {
                 val hx = beamLeft + beamW * f
                 drawCircle(
                     color = Color(0xFF0F172A),
                     radius = 2.5.dp.toPx(),
-                    center = Offset(hx, drawingCenterY),
+                    center = Offset(hx, centerY),
                     style = Stroke(width = 1.2f)
                 )
             }
         }
 
-        // Overlay Text Elements
-        Column(
+        // Overlay Text Elements with Clean Non-Overlapping Bounds
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(14.dp)
         ) {
-            // Header Row: Drawing Sheet Filename & BOM Content
+            // 1. Top Left: Drawing Sheet Filename
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth(0.48f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(text = "📐", fontSize = 11.sp)
+                Text(
+                    text = filename,
+                    color = Color(0xFF0F172A),
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // 2. Top Right: Bill of Materials Box Content
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .fillMaxWidth(0.44f)
+                    .padding(end = 4.dp, top = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "BILL OF MATERIAL",
+                    color = Color(0xFF0F172A),
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "$partMark | 1 PC",
+                    color = Color(0xFF334155),
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
+            }
+
+            // 3. Center Callouts: Top Dimension Text + Bottom Member Callout
+            Text(
+                text = length ?: "13'-2\"",
+                color = Color(0xFF0F172A),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 46.dp)
+            )
+
+            Text(
+                text = "ONE = ANGLE : $partMark",
+                color = Color(0xFF0F172A),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 60.dp)
+            )
+
+            // 4. Bottom Left: Member Profile & Spec
+            Text(
+                text = "$profile x ${length ?: "13'-2\""}",
+                color = Color(0xFF475569),
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth(0.48f)
+                    .padding(bottom = 4.dp)
+            )
+
+            // 5. Bottom Right: Title Block Content
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .fillMaxWidth(0.44f)
+                    .padding(end = 4.dp, bottom = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Carrillo Steel Erectors",
+                    color = Color(0xFF0F172A),
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1
+                )
+                Text(
+                    text = "JOB #1682 | SHEET $partMark",
+                    color = Color(0xFF475569),
+                    fontSize = 7.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
+            }
+
+            // 6. Floating Action Badge
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF0F172A).copy(alpha = 0.90f))
+                    .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(text = "📐", fontSize = 11.sp)
+                    Text("🔍", fontSize = 10.sp)
                     Text(
-                        text = filename,
-                        color = Color(0xFF0F172A),
+                        text = "Tap to View Full PDF",
+                        color = Color.White,
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontWeight = FontWeight.Bold
                     )
                 }
-
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    modifier = Modifier.padding(end = 4.dp)
-                ) {
-                    Text(
-                        text = "BILL OF MATERIAL",
-                        color = Color(0xFF0F172A),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "$partMark | 1 PC | $profile x ${length ?: "13'-2\""}",
-                        color = Color(0xFF334155),
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-
-            // Center Callouts
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = length ?: "13'-2\"",
-                    color = Color(0xFF0F172A),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-                Spacer(modifier = Modifier.height(28.dp))
-                Text(
-                    text = "ONE = ANGLE : $partMark",
-                    color = Color(0xFF0F172A),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            // Bottom Row Overlay
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Text(
-                    text = "$profile x ${length ?: "13'-2\""} | 79 lb",
-                    color = Color(0xFF475569),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    modifier = Modifier.padding(end = 4.dp)
-                ) {
-                    Text(
-                        text = "Carrillo Steel Fabrication & Erectors",
-                        color = Color(0xFF0F172A),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "JOB #1682 | SHEET $partMark",
-                        color = Color(0xFF475569),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-        }
-
-        // Tap to View Full Drawing Badge
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF0F172A).copy(alpha = 0.85f))
-                .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                .padding(horizontal = 12.dp, vertical = 5.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                Text("🔍", fontSize = 11.sp)
-                Text(
-                    text = "Tap to View Full Drawing PDF",
-                    color = Color.White,
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Bold
-                )
             }
         }
     }
