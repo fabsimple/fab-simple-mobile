@@ -31,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.fabsimple.app.components.printHtml
 import com.fabsimple.app.components.ButtonVariant
 import com.fabsimple.app.components.FabButton
 import com.fabsimple.app.components.CameraPhotoPicker
@@ -323,7 +324,10 @@ class PartDetailScreen(val partId: String) : Screen {
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0xFF1E293B))
                                 .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
-                                .clickable { /* Triggers print traveller */ }
+                                .clickable {
+                                    val html = generatePaperTravellerHtml(p, usersList)
+                                    printHtml(html, "Traveller_${p.part_mark}")
+                                }
                                 .padding(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text("🖨 Fallback Traveller", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -2265,3 +2269,194 @@ fun generateStructuralDrawingHtml(partMark: String, profile: String, length: Str
     return "data:text/html;charset=utf-8," + svgContent.encodeURLQueryComponent()
 }
 
+fun generatePaperTravellerHtml(part: com.fabsimple.shared.domain.model.Part, usersList: List<com.fabsimple.shared.domain.model.UserProfile>): String {
+    val userName = { uid: String? ->
+        if (uid.isNullOrBlank()) ""
+        else {
+            val u = usersList.find { it.id == uid || it.user_id == uid }
+            u?.full_name?.takeIf { it.isNotBlank() } ?: uid.take(8)
+        }
+    }
+
+    val cutBy = userName(part.cut_completed_by)
+    val cutDate = part.cut_completed_at?.takeIf { it.isNotBlank() } ?: ""
+    val cutHrs = if ((part.cut_hours ?: 0.0) > 0) part.cut_hours.toString() else ""
+    val cutNotes = if (!part.cut_drop_length.isNullOrBlank()) "Drop: ${part.cut_drop_length}" else ""
+
+    val fitBy = if (part.fit_skipped == true) "SKIPPED" else userName(part.fit_completed_by)
+    val fitDate = if (part.fit_skipped == true) "N/A" else (part.fit_completed_at ?: "")
+    val fitHrs = if (part.fit_skipped == true) "—" else if ((part.fit_hours ?: 0.0) > 0) part.fit_hours.toString() else ""
+    val fitNotes = if (part.fit_skipped == true) "[✓] Skipped" else ""
+
+    val weldBy = if (part.weld_skipped == true) "SKIPPED" else userName(part.weld_completed_by)
+    val weldDate = if (part.weld_skipped == true) "N/A" else (part.weld_completed_at ?: "")
+    val weldHrs = if (part.weld_skipped == true) "—" else if ((part.weld_hours ?: 0.0) > 0) part.weld_hours.toString() else ""
+    val weldNotes = if (part.weld_skipped == true) "[✓] Skipped" else ""
+
+    val weldQcBy = userName(part.weld_qc_by)
+    val weldQcDate = part.weld_qc_at ?: ""
+    val weldQcNotes = if (!part.weld_qc_at.isNullOrBlank()) "[✓] Pass" else ""
+
+    val finishBy = userName(part.finish_completed_by)
+    val finishDate = part.finish_completed_at ?: ""
+    val finishHrs = if ((part.finish_hours ?: 0.0) > 0) part.finish_hours.toString() else ""
+
+    val inspBy = userName(part.insp_completed_by)
+    val inspDate = part.insp_completed_at ?: ""
+    val inspNotes = if (!part.insp_completed_at.isNullOrBlank()) "[✓] Pass" else ""
+
+    val completedCount = listOf(
+        part.cut_completed_at,
+        if (part.fit_completed_at != null || part.fit_skipped == true) "done" else null,
+        if (part.weld_completed_at != null || part.weld_skipped == true) "done" else null,
+        part.finish_completed_at,
+        part.insp_completed_at
+    ).count { !it.isNullOrBlank() }
+
+    val emptyLine = "<span class=\"empty\">_______________</span>"
+    val emptyHr = "<span class=\"empty\">____</span>"
+
+    val cByStr = if (cutBy.isNotBlank()) cutBy else emptyLine
+    val cDateStr = if (cutDate.isNotBlank()) cutDate else emptyLine
+    val cHrsStr = if (cutHrs.isNotBlank()) cutHrs else emptyHr
+    val cNotesStr = if (cutNotes.isNotBlank()) cutNotes else "Drop Length: ________"
+
+    val fByStr = if (fitBy.isNotBlank()) fitBy else emptyLine
+    val fDateStr = if (fitDate.isNotBlank()) fitDate else emptyLine
+    val fHrsStr = if (fitHrs.isNotBlank()) fitHrs else emptyHr
+    val fNotesStr = if (fitNotes.isNotBlank()) fitNotes else "[ ] Skip Fit-Up"
+
+    val wByStr = if (weldBy.isNotBlank()) weldBy else emptyLine
+    val wDateStr = if (weldDate.isNotBlank()) weldDate else emptyLine
+    val wHrsStr = if (weldHrs.isNotBlank()) weldHrs else emptyHr
+    val wNotesStr = if (weldNotes.isNotBlank()) weldNotes else "[ ] Skip Weld"
+
+    val wQcByStr = if (weldQcBy.isNotBlank()) weldQcBy else emptyLine
+    val wQcDateStr = if (weldQcDate.isNotBlank()) weldQcDate else emptyLine
+    val wQcNotesStr = if (weldQcNotes.isNotBlank()) weldQcNotes else "Result: [ ] Pass [ ] Fail"
+
+    val fnByStr = if (finishBy.isNotBlank()) finishBy else emptyLine
+    val fnDateStr = if (finishDate.isNotBlank()) finishDate else emptyLine
+    val fnHrsStr = if (finishHrs.isNotBlank()) finishHrs else emptyHr
+
+    val inspByStr = if (inspBy.isNotBlank()) inspBy else emptyLine
+    val inspDateStr = if (inspDate.isNotBlank()) inspDate else emptyLine
+    val inspNotesStr = if (inspNotes.isNotBlank()) inspNotes else "Result: [ ] Pass [ ] Fail"
+
+    val doneCutClass = if (!part.cut_completed_at.isNullOrBlank()) "done" else ""
+    val doneFitClass = if (!part.fit_completed_at.isNullOrBlank()) "done" else if (part.fit_skipped == true) "skipped" else ""
+    val doneWeldClass = if (!part.weld_completed_at.isNullOrBlank()) "done" else if (part.weld_skipped == true) "skipped" else ""
+    val doneWeldQcClass = if (!part.weld_qc_at.isNullOrBlank()) "done" else ""
+    val doneFinishClass = if (!part.finish_completed_at.isNullOrBlank()) "done" else ""
+    val doneInspClass = if (!part.insp_completed_at.isNullOrBlank()) "done" else ""
+
+    val summaryStyle = if (completedCount >= 5) "#dcfce7; color: #166534" else "#fef3c7; color: #92400e"
+
+    return """
+        <html><head><title>Traveller Sheet — ${part.part_mark}</title>
+        <style>
+          body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; color: #000; }
+          .hdr { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 20px; }
+          .title { font-size: 20px; font-weight: 900; letter-spacing: 0.5px; }
+          .job { font-family: monospace; font-size: 13px; font-weight: bold; }
+          .summary { display: inline-block; font-size: 12px; font-weight: bold; padding: 4px 10px; border-radius: 4px; margin-left: 12px; }
+          .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
+          .meta-item { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+          .meta-val { font-family: monospace; font-size: 13px; font-weight: bold; color: #0f172a; margin-top: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+          th, td { border: 1px solid #94a3b8; padding: 8px 10px; text-align: left; font-size: 12px; }
+          th { background: #e2e8f0; font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+          .done { background: #f0fdf4; }
+          .skipped { background: #fefce8; color: #92400e; font-style: italic; }
+          .empty { color: #cbd5e1; }
+          .stage-name { font-weight: 700; }
+          .footer { margin-top: 30px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+        </style></head>
+        <body>
+          <div class="hdr">
+            <div>
+              <span class="title">FABSIMPLE TRAVELLER SHEET</span>
+              <span class="summary" style="background: $summaryStyle">${completedCount}/5 Stages Done</span>
+            </div>
+            <div class="job">JOB: ${part.project_number ?: "—"} &bull; ${part.project_name ?: "—"}</div>
+          </div>
+
+          <div class="meta-grid">
+            <div class="meta-item">Piece Mark<div class="meta-val">${part.part_mark}</div></div>
+            <div class="meta-item">Profile<div class="meta-val">${part.profile}</div></div>
+            <div class="meta-item">Heat Number<div class="meta-val">${part.heat_number ?: "—"}</div></div>
+            <div class="meta-item">Finish Spec<div class="meta-val">${part.finish ?: "SHOP PRIMER"}</div></div>
+          </div>
+
+          <h3 style="margin-bottom: 4px;">Shop Floor Sign-Off Timeline</h3>
+          <p style="font-size: 11px; color: #64748b; margin-top: 0;">Tracked statuses are auto-populated. Blank cells can be filled by hand as a fallback.</p>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 22%;">Stage</th>
+                <th style="width: 22%;">Completed By</th>
+                <th style="width: 22%;">Date / Time</th>
+                <th style="width: 12%;">Hours</th>
+                <th style="width: 22%;">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="$doneCutClass">
+                <td class="stage-name">1. Cutting <span style="font-weight:400;color:#64748b;">(Self-Check)</span></td>
+                <td>$cByStr</td>
+                <td>$cDateStr</td>
+                <td>$cHrsStr</td>
+                <td>$cNotesStr</td>
+              </tr>
+              <tr class="$doneFitClass">
+                <td class="stage-name">2. Fit-Up <span style="font-weight:400;color:#64748b;">(Self-Check)</span></td>
+                <td>$fByStr</td>
+                <td>$fDateStr</td>
+                <td>$fHrsStr</td>
+                <td>$fNotesStr</td>
+              </tr>
+              <tr class="$doneWeldClass">
+                <td class="stage-name">3. Welding <span style="font-weight:400;color:#64748b;">(AWS D1.1)</span></td>
+                <td>$wByStr</td>
+                <td>$wDateStr</td>
+                <td>$wHrsStr</td>
+                <td>$wNotesStr</td>
+              </tr>
+              <tr class="$doneWeldQcClass">
+                <td class="stage-name">Weld QC Sign-off <span style="font-weight:400;color:#64748b;">(CWI)</span></td>
+                <td>$wQcByStr</td>
+                <td>$wQcDateStr</td>
+                <td style="background: #e2e8f0; text-align:center;">N/A</td>
+                <td>$wQcNotesStr</td>
+              </tr>
+              <tr class="$doneFinishClass">
+                <td class="stage-name">4. Paint / Coating</td>
+                <td>$fnByStr</td>
+                <td>$fnDateStr</td>
+                <td>$fnHrsStr</td>
+                <td>DFT Mils: ________</td>
+              </tr>
+              <tr class="$doneInspClass">
+                <td class="stage-name">5. Final Inspection <span style="font-weight:400;color:#64748b;">(CWI Gate)</span></td>
+                <td>$inspByStr</td>
+                <td>$inspDateStr</td>
+                <td style="background: #e2e8f0; text-align:center;">N/A</td>
+                <td>$inspNotesStr</td>
+              </tr>
+              <tr>
+                <td class="stage-name">6. Field RCSC Bolt Signoff <span style="font-weight:400;color:#64748b;">(RCSC Field QC)</span></td>
+                <td><span class="empty">_______________</span></td>
+                <td><span class="empty">_______________</span></td>
+                <td style="background: #e2e8f0; text-align:center;">N/A</td>
+                <td>Method: [ ] Turn-Nut [ ] DTI [ ] Wrench</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer">
+            Generated via FabSimple Mobile Shop Traveller Engine
+          </div>
+        </body></html>
+    """
+}

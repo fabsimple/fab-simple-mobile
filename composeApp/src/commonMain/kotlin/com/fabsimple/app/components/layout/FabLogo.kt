@@ -17,54 +17,73 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Mobile App Brand Logo Icon matching exact uploaded logo design.
- * Vibrant rounded square containing a bold white "F" and "FAB" subtext.
+ * Mobile App Brand Logo Icon matching the exact 4-grid modular steel block SVG logo.
+ * Vibrant rounded square containing a 2x2 grid of rounded white blocks with precise opacities.
  */
 @Composable
 fun FabLogoIcon(
     size: Dp = 36.dp,
     modifier: Modifier = Modifier
 ) {
-    val cornerRadius = size * 0.28f
-    val fSize = (size.value * 0.52f).sp
-    val fabSubSize = (size.value * 0.18f).sp
+    val cornerRadius = size * 0.25f
+    val blockSize = size * 0.28f
+    val blockRadius = size * 0.06f
+    val gapSize = size * 0.08f
 
     Box(
         modifier = modifier
             .size(size)
             .clip(RoundedCornerShape(cornerRadius))
-            .background(Color(0xFF4C47F4))
-            .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.5f), RoundedCornerShape(cornerRadius)),
+            .background(Color(0xFF4F46E5))
+            .border(1.dp, Color(0xFF818CF8).copy(alpha = 0.4f), RoundedCornerShape(cornerRadius)),
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(bottom = 1.dp)
+            verticalArrangement = Arrangement.spacedBy(gapSize),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "F",
-                color = Color.White,
-                fontSize = fSize,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.SansSerif,
-                lineHeight = fSize
-            )
-            Text(
-                text = "FAB",
-                color = Color.White,
-                fontSize = fabSubSize,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif,
-                letterSpacing = 1.sp,
-                lineHeight = fabSubSize
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(gapSize)
+            ) {
+                // Top-Left (Opacity 1.0)
+                Box(
+                    modifier = Modifier
+                        .size(blockSize)
+                        .clip(RoundedCornerShape(blockRadius))
+                        .background(Color.White)
+                )
+                // Top-Right (Opacity 0.5)
+                Box(
+                    modifier = Modifier
+                        .size(blockSize)
+                        .clip(RoundedCornerShape(blockRadius))
+                        .background(Color.White.copy(alpha = 0.5f))
+                )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(gapSize)
+            ) {
+                // Bottom-Left (Opacity 0.5)
+                Box(
+                    modifier = Modifier
+                        .size(blockSize)
+                        .clip(RoundedCornerShape(blockRadius))
+                        .background(Color.White.copy(alpha = 0.5f))
+                )
+                // Bottom-Right (Opacity 0.85)
+                Box(
+                    modifier = Modifier
+                        .size(blockSize)
+                        .clip(RoundedCornerShape(blockRadius))
+                        .background(Color.White.copy(alpha = 0.85f))
+                )
+            }
         }
     }
 }
 
 /**
- * Full Brand Logo Header (Icon + FabSimple Text)
+ * Full Brand Logo Header (4-Grid Icon + FabSimple Text)
  */
 @Composable
 fun FabLogoHeader(
