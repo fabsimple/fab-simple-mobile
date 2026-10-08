@@ -21,3 +21,9 @@ local.properties
 *.suo
 *.userosv
 *.userprefs
+
+# Signing Keystores & Credentials
+*.jks
+*.keystore
+keystore.properties
+
