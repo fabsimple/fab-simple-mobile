@@ -1,6 +1,7 @@
 package com.fabsimple.shared.data.network
 
 import io.ktor.client.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
@@ -46,6 +47,11 @@ class FabApiClient(
     val httpClient = HttpClient {
         install(ContentNegotiation) {
             json(json)
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15000L
+            connectTimeoutMillis = 10000L
+            socketTimeoutMillis = 15000L
         }
         install(Logging) {
             logger = Logger.SIMPLE

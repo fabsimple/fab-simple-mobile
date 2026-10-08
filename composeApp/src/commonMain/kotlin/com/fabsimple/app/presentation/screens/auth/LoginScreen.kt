@@ -17,6 +17,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.fabsimple.app.components.FabButton
 import com.fabsimple.app.components.FabTextField
+import com.fabsimple.app.components.isNetworkAvailable
 import com.fabsimple.app.components.layout.FabLogoHeader
 import com.fabsimple.app.presentation.screens.utilities.PrivacyPolicyScreen
 import com.fabsimple.app.theme.*
@@ -102,8 +103,12 @@ class LoginScreen(private val initialErrorMessage: String? = null) : Screen {
                         text = "Sign In",
                         onClick = {
                             if (loading) return@FabButton
-                            loading = true
                             errorMessage = null
+                            if (!isNetworkAvailable()) {
+                                errorMessage = "No internet connection. Please check your network and try again."
+                                return@FabButton
+                            }
+                            loading = true
                             coroutineScope.launch {
                                 try {
                                     val session = AppContainer.authRepository.signIn(email, password)
@@ -115,7 +120,22 @@ class LoginScreen(private val initialErrorMessage: String? = null) : Screen {
                                         navigator.replaceAll(com.fabsimple.app.presentation.screens.dashboard.DashboardScreen())
                                     }
                                 } catch (e: Exception) {
-                                    errorMessage = e.message ?: "Authentication failed"
+                                    val msg = e.message ?: ""
+                                    errorMessage = when {
+                                        !isNetworkAvailable() ->
+                                            "No internet connection. Please check your network and try again."
+                                        msg.contains("timeout", ignoreCase = true) ||
+                                        msg.contains("timed out", ignoreCase = true) ->
+                                            "Connection timed out. Please check your internet connection."
+                                        msg.contains("UnknownHostException", ignoreCase = true) ||
+                                        msg.contains("Unable to resolve host", ignoreCase = true) ||
+                                        msg.contains("ConnectException", ignoreCase = true) ||
+                                        msg.contains("Failed to connect", ignoreCase = true) ||
+                                        msg.contains("Network is unreachable", ignoreCase = true) ||
+                                        msg.contains("No address associated with hostname", ignoreCase = true) ->
+                                            "No internet connection. Please check your network and try again."
+                                        else -> msg.ifBlank { "Authentication failed. Please check your credentials." }
+                                    }
                                 } finally {
                                     loading = false
                                 }

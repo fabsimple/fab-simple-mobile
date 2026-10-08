@@ -16,6 +16,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.fabsimple.app.components.FabButton
 import com.fabsimple.app.components.FabTextField
+import com.fabsimple.app.components.isNetworkAvailable
 import com.fabsimple.app.theme.*
 import com.fabsimple.shared.di.AppContainer
 import kotlinx.coroutines.launch
@@ -101,16 +102,35 @@ class ForgotPasswordScreen : Screen {
                         text = "Send Reset Link",
                         onClick = {
                             if (loading) return@FabButton
-                            loading = true
                             errorMessage = null
                             successMessage = null
+                            if (!isNetworkAvailable()) {
+                                errorMessage = "No internet connection. Please check your network and try again."
+                                return@FabButton
+                            }
+                            loading = true
                             coroutineScope.launch {
                                 try {
                                     AppContainer.authRepository.forgotPassword(email)
                                     successMessage = "Recovery email sent successfully. Please check your inbox."
                                     email = ""
                                 } catch (e: Exception) {
-                                    errorMessage = e.message ?: "Failed to send reset link"
+                                    val msg = e.message ?: ""
+                                    errorMessage = when {
+                                        !isNetworkAvailable() ->
+                                            "No internet connection. Please check your network and try again."
+                                        msg.contains("timeout", ignoreCase = true) ||
+                                        msg.contains("timed out", ignoreCase = true) ->
+                                            "Connection timed out. Please check your internet connection."
+                                        msg.contains("UnknownHostException", ignoreCase = true) ||
+                                        msg.contains("Unable to resolve host", ignoreCase = true) ||
+                                        msg.contains("ConnectException", ignoreCase = true) ||
+                                        msg.contains("Failed to connect", ignoreCase = true) ||
+                                        msg.contains("Network is unreachable", ignoreCase = true) ||
+                                        msg.contains("No address associated with hostname", ignoreCase = true) ->
+                                            "No internet connection. Please check your network and try again."
+                                        else -> msg.ifBlank { "Failed to send reset link" }
+                                    }
                                 } finally {
                                     loading = false
                                 }
