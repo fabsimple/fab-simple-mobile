@@ -145,32 +145,15 @@ class LoginScreen(private val initialErrorMessage: String? = null) : Screen {
                         enabled = !loading
                     )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    TextButton(
+                        onClick = { navigator.push(ForgotPasswordScreen()) }
                     ) {
-                        TextButton(
-                            onClick = { navigator.push(SignUpScreen()) }
-                        ) {
-                            Text(
-                                text = "Create Org",
-                                color = Color(0xFF818CF8),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        TextButton(
-                            onClick = { navigator.push(ForgotPasswordScreen()) }
-                        ) {
-                            Text(
-                                text = "Forgot Password?",
-                                color = Color(0xFF818CF8),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            text = "Forgot Password?",
+                            color = Color(0xFF818CF8),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
 
                     TextButton(

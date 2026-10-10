@@ -144,48 +144,48 @@ class PrivacyPolicyScreen : Screen {
                     )
 
                     // Section 5: Account Deletion Request (Play Store Required)
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = FabShapes.Card,
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF312E81).copy(alpha = 0.4f)),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6366F1))
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "5. Account & Data Deletion",
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "In compliance with Google Play Store policies, you may request full deletion of your user account and data at any time. Personal credentials and authentication tokens will be deleted within 30 days.",
-                                color = Color(0xFFE0E7FF),
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            if (deletionSubmitted) {
-                                Text(
-                                    text = "✓ Account deletion request received. Our privacy team will process it within 30 days.",
-                                    color = Color(0xFF34D399),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            } else {
-                                FabButton(
-                                    text = "Request Account Deletion",
-                                    onClick = { showDeletionModal = true },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    }
+//                    Card(
+//                        modifier = Modifier.fillMaxWidth(),
+//                        shape = FabShapes.Card,
+//                        colors = CardDefaults.cardColors(containerColor = Color(0xFF312E81).copy(alpha = 0.4f)),
+//                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6366F1))
+//                    ) {
+//                        Column(modifier = Modifier.padding(16.dp)) {
+//                            Text(
+//                                text = "5. Account & Data Deletion",
+//                                color = Color.White,
+//                                fontSize = 15.sp,
+//                                fontWeight = FontWeight.Bold
+//                            )
+//                            Spacer(modifier = Modifier.height(6.dp))
+//                            Text(
+//                                text = "In compliance with Google Play Store policies, you may request full deletion of your user account and data at any time. Personal credentials and authentication tokens will be deleted within 30 days.",
+//                                color = Color(0xFFE0E7FF),
+//                                fontSize = 13.sp,
+//                                lineHeight = 18.sp
+//                            )
+//                            Spacer(modifier = Modifier.height(12.dp))
+//
+//                            if (deletionSubmitted) {
+//                                Text(
+//                                    text = "✓ Account deletion request received. Our privacy team will process it within 30 days.",
+//                                    color = Color(0xFF34D399),
+//                                    fontSize = 12.sp,
+//                                    fontWeight = FontWeight.Bold
+//                                )
+//                            } else {
+//                                FabButton(
+//                                    text = "Request Account Deletion",
+//                                    onClick = { showDeletionModal = true },
+//                                    modifier = Modifier.fillMaxWidth()
+//                                )
+//                            }
+//                        }
+//                    }
 
                     // Section 6: Contact
                     PolicySection(
-                        title = "6. Contact Privacy Office",
+                        title = "5. Contact Privacy Office",
                         content = "For privacy inquiries or statutory data requests, contact our security team at:\n" +
                                 "Email: privacy@fabsimple.com\n" +
                                 "Web: https://fabsimple.com/privacy"
